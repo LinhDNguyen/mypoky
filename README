@@ -13,3 +13,7 @@ see the Poky website http://pokylinux.org.
 
 Additional information on the specifics of hardware that Poky supports
 is available in README.hardware.
+
+==========
+This version is created by LinhNV (nvl1109@gmail.com) with porting 
+package for i.MX28 board
