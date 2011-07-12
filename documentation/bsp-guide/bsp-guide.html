@@ -1,0 +1,422 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><title></title><link rel="stylesheet" type="text/css" href="style.css" /><meta name="generator" content="DocBook XSL Stylesheets V1.76.1" /></head><body><div xml:lang="en" class="book" lang="en"><div class="titlepage"><div><div><h1 class="title"><a id="bsp-guide"></a></h1></div><div><div class="authorgroup">
+            <div class="author"><h3 class="author"><span class="firstname">Richard</span> <span class="surname">Purdie</span></h3><div class="affiliation">
+                    <span class="orgname">Intel Corporation<br /></span>
+                </div><code class="email">&lt;<a class="email" href="mailto:richard.purdie@linuxfoundation.org">richard.purdie@linuxfoundation.org</a>&gt;</code></div>
+        </div></div><div><p class="copyright">Copyright © 2010-2011 Linux Foundation</p></div><div><div class="legalnotice" title="Legal Notice"><a id="id2734109"></a>
+      <p>
+        Permission is granted to copy, distribute and/or modify this document under 
+        the terms of the <a class="ulink" href="http://creativecommons.org/licenses/by-nc-sa/2.0/uk/" target="_top">Creative Commons Attribution-Non-Commercial-Share Alike 2.0 UK: England &amp; Wales</a> as published by Creative Commons.
+      </p>
+    </div></div><div><div class="revhistory"><table border="1" width="100%" summary="Revision history"><tr><th align="left" valign="top" colspan="2"><strong>Revision History</strong></th></tr>
+            <tr><td align="left">Revision 0.9</td><td align="left">27 October 2010</td></tr><tr><td align="left" colspan="2">This manual revision is the initial manual and corresponds to the 
+                    Yocto Project 0.9 Release.</td></tr>
+            <tr><td align="left">Revision 1.0</td><td align="left">6 April 2011</td></tr><tr><td align="left" colspan="2">This manual revision corresponds to the Yocto Project 1.0 Release.</td></tr>
+        </table></div></div></div><hr /></div><div class="toc"><p><strong>Table of Contents</strong></p><dl><dt><span class="chapter"><a href="#bsp">1. Board Support Packages (BSP) - Developers Guide</a></span></dt><dd><dl><dt><span class="section"><a href="#bsp-filelayout">1.1. Example Filesystem Layout</a></span></dt><dd><dl><dt><span class="section"><a href="#bsp-filelayout-license">1.1.1. License Files</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-readme">1.1.2. README File</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-binary">1.1.3. Pre-built User Binaries</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-layer">1.1.4. Layer Configuration File</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-machine">1.1.5. Hardware Configuration Options</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-misc-recipes">1.1.6. Miscellaneous Recipe Files</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-recipes-graphics">1.1.7. Display Support Files</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-kernel">1.1.8. Linux Kernel Configuration</a></span></dt></dl></dd><dt><span class="section"><a href="#bsp-click-through-licensing">1.2. BSP 'Click-Through' Licensing Procedure</a></span></dt></dl></dd></dl></div>
+    
+
+    <div class="chapter" title="Chapter 1. Board Support Packages (BSP) - Developers Guide"><div class="titlepage"><div><div><h2 class="title"><a id="bsp"></a>Chapter 1. Board Support Packages (BSP) - Developers Guide</h2></div></div></div><div class="toc"><p><strong>Table of Contents</strong></p><dl><dt><span class="section"><a href="#bsp-filelayout">1.1. Example Filesystem Layout</a></span></dt><dd><dl><dt><span class="section"><a href="#bsp-filelayout-license">1.1.1. License Files</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-readme">1.1.2. README File</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-binary">1.1.3. Pre-built User Binaries</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-layer">1.1.4. Layer Configuration File</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-machine">1.1.5. Hardware Configuration Options</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-misc-recipes">1.1.6. Miscellaneous Recipe Files</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-recipes-graphics">1.1.7. Display Support Files</a></span></dt><dt><span class="section"><a href="#bsp-filelayout-kernel">1.1.8. Linux Kernel Configuration</a></span></dt></dl></dd><dt><span class="section"><a href="#bsp-click-through-licensing">1.2. BSP 'Click-Through' Licensing Procedure</a></span></dt></dl></div><p>
+            A Board Support Package (BSP) is a collection of information that
+            defines how to support a particular hardware device, set of devices, or 
+            hardware platform. 
+            The BSP includes information about the hardware features 
+            present on the device and kernel configuration information along with any 
+            additional hardware drivers required.
+            The BSP also lists any additional software 
+            components required in addition to a generic Linux software stack for both 
+            essential and optional platform features.
+        </p><p>
+            This section (or document if you are reading the BSP Developer's Guide) defines
+            a structure for these components
+            so that BSPs follow a commonly understood layout.
+            Providing a common form allows end-users to understand and become familiar 
+            with the layout.  
+            A common form also encourages standardization 
+            of software support of hardware.
+        </p><p>
+            The proposed format does have elements that are specific to the Poky and 
+            OpenEmbedded build systems. 
+            It is intended that this information can be 
+            used by other systems besides Poky and OpenEmbedded and that it will be simple
+            to extract information and convert it to other formats if required.
+            Poky, through its standard layers mechanism, can directly accept the format 
+            described as a layer.
+            The BSP captures all 
+            the hardware-specific details in one place in a standard format, which is 
+            useful for any person wishing to use the hardware platform regardless of 
+            the build system they are using.
+        </p><p>
+            The BSP specification does not include a build system or other tools -
+            it is concerned with the hardware-specific components only. 
+            At the end 
+            distribution point you can ship the BSP combined with a build system
+            and other tools. 
+            However, it is important to maintain the distinction that these
+            are separate components that happen to be combined in certain end products.
+        </p><div class="section" title="1.1. Example Filesystem Layout"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a id="bsp-filelayout"></a>1.1. Example Filesystem Layout</h2></div></div></div><p>
+                The BSP consists of a file structure inside a base directory, which uses the following 
+                naming convention:
+                </p><pre class="literallayout">
+     meta-&lt;bsp_name&gt;
+                </pre><p>
+                "bsp_name" is a placeholder for the machine or platform name.
+                Here are some example base directory names:
+                </p><pre class="literallayout">
+     meta-emenlow
+     meta-intel_n450
+     meta-beagleboard
+                </pre><p>
+            </p><p>
+                Below is the common form for the file structure inside a base directory.
+                While you can use this basic form for the standard, realize that the actual structures
+                for specific BSPs could differ. 
+
+                </p><pre class="programlisting">
+meta-&lt;bsp_name&gt;/                                
+meta-&lt;bsp_name&gt;/&lt;bsp_license_file&gt;
+meta-&lt;bsp_name&gt;/README
+meta-&lt;bsp_name&gt;/binary/&lt;bootable_images&gt;
+meta-&lt;bsp_name&gt;/conf/layer.conf 
+meta-&lt;bsp_name&gt;/conf/machine/*.conf
+meta-&lt;bsp_name&gt;/recipes-bsp/*
+meta-&lt;bsp_name&gt;/recipes-graphics/*            
+meta-&lt;bsp_name&gt;/recipes-kernel/linux/linux-yocto_git.bbappend
+                </pre><p>
+            </p><p>
+                Below is an example of the crownbay BSP:
+
+                </p><pre class="programlisting">
+meta-crownbay/COPYING.MIT
+meta-crownbay/README
+meta-crownbay/binary/.gitignore
+meta-crownbay/conf/layer.conf
+meta-crownbay/conf/machine/crownbay.conf
+meta-crownbay/recipes-bsp/formfactor/formfactor/crownbay/machconfig
+meta-crownbay/recipes-bsp/formfactor/formfactor_0.0.bbappend
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-config/crownbay/xcorg.conf
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-config_0.1.bbappend
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd-bin/.gitignore
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd-bin_1.7.99.2.bb
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd/crosscompile.patch
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd/fix_open_max_preprocessor_error.patch
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd/macro_tweak.patch
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd/nodolt.patch
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd_1.7.99.2.bb
+meta-crownbay/recipes-kernel/linux/linux-yocto_git.bbappend
+                </pre><p>
+            </p><p>
+                The following sections describe each part of the proposed BSP format.
+            </p><div class="section" title="1.1.1. License Files"><div class="titlepage"><div><div><h3 class="title"><a id="bsp-filelayout-license"></a>1.1.1. License Files</h3></div></div></div><pre class="programlisting">
+meta-&lt;bsp_name&gt;/&lt;bsp_license_file&gt;
+            </pre><p>
+                These optional files satisfy licensing requirements for the BSP.
+                The type or types of files here can vary depending on the licensing requirements.
+                For example, in the crownbay BSP all licensing requirements are handled with the 
+                <code class="filename">COPYING.MIT</code> file.  
+            </p><p>
+                Licensing files can be MIT, BSD, GPLv*, and so forth.
+                These files are recommended for the BSP but are optional and totally up to the BSP developer.
+            </p></div><div class="section" title="1.1.2. README File"><div class="titlepage"><div><div><h3 class="title"><a id="bsp-filelayout-readme"></a>1.1.2. README File</h3></div></div></div><pre class="programlisting">
+meta-&lt;bsp_name&gt;/README
+            </pre><p>
+                This file provides information on how to boot the live images that are optionally 
+                included in the <code class="filename">/binary</code> directory.
+                The <code class="filename">README</code> file also provides special information needed for 
+                building the image.
+            </p><p>
+                Technically speaking a <code class="filename">README</code> is optional but it is highly 
+                recommended that every BSP has one.
+            </p></div><div class="section" title="1.1.3. Pre-built User Binaries"><div class="titlepage"><div><div><h3 class="title"><a id="bsp-filelayout-binary"></a>1.1.3. Pre-built User Binaries</h3></div></div></div><pre class="programlisting">
+meta-&lt;bsp_name&gt;/binary/&lt;bootable_images&gt;
+            </pre><p>
+                This optional area contains useful pre-built kernels and user-space filesystem 
+                images appropriate to the target system.
+                This directory contains the Application Development Toolkit (ADT) and minimal
+                live images when the BSP is has been "tar-balled" and placed on the Yocto Project website. 
+                You can use these kernels and images to get a system running and quickly get started 
+                on development tasks.
+            </p><p> 
+                The exact types of binaries present are highly hardware-dependent.
+                However, a README file should be present in the BSP file structure that explains how to use 
+                the kernels and images with the target hardware. 
+                If pre-built binaries are present, source code to meet licensing requirements must also 
+                be provided in some form.
+            </p></div><div class="section" title="1.1.4. Layer Configuration File"><div class="titlepage"><div><div><h3 class="title"><a id="bsp-filelayout-layer"></a>1.1.4. Layer Configuration File</h3></div></div></div><pre class="programlisting">
+meta-&lt;bsp_name&gt;/conf/layer.conf 
+            </pre><p>
+                This file identifies the structure as a Poky layer, identifies the  
+                contents of the layer, and contains information about how Poky should use it. 
+                Generally, a standard boilerplate file such as the following works.
+                In the following example you would replace "bsp" and "_bsp" with the actual name
+                of the BSP (i.e. &lt;bsp_name&gt; from the example template).
+            </p><p>
+               </p><pre class="programlisting">
+# We have a conf directory, add to BBPATH
+BBPATH := "${BBPATH}:${LAYERDIR}"
+
+# We have a recipes directory containing .bb and .bbappend files, add to BBFILES
+BBFILES := "${BBFILES} ${LAYERDIR}/recipes/*/*.bb \ ${LAYERDIR}/recipes/*/*.bbappend"
+
+BBFILE_COLLECTIONS += "bsp"
+BBFILE_PATTERN_bsp := "^${LAYERDIR}/"
+BBFILE_PRIORITY_bsp = "5"
+                </pre><p>
+            </p><p>
+                This file simply makes BitBake aware of the recipes and configuration directories.
+                This file must exist so that Poky can recognize the BSP.
+            </p></div><div class="section" title="1.1.5. Hardware Configuration Options"><div class="titlepage"><div><div><h3 class="title"><a id="bsp-filelayout-machine"></a>1.1.5. Hardware Configuration Options</h3></div></div></div><pre class="programlisting">
+meta-&lt;bsp_name&gt;/conf/machine/*.conf
+            </pre><p>
+                The machine files bind together all the information contained elsewhere
+                in the BSP into a format that Poky can understand. 
+                If the BSP supports multiple machines, multiple machine configuration files
+                can be present. 
+                These filenames correspond to the values to which users have set the MACHINE variable.
+            </p><p>
+                These files define things such as the kernel package to use
+                (PREFERRED_PROVIDER of virtual/kernel), the hardware drivers to
+                include in different types of images, any special software components
+                that are needed, any bootloader information, and also any special image
+                format requirements.
+            </p><p>
+                At least one machine file is required for a BSP layer.
+                However, you can supply more than one file.
+            </p><p>
+                This directory could also contain shared hardware "tuning" definitions that are commonly used to
+                pass specific optimization flags to the compiler. 
+                An example is <code class="filename">tune-atom.inc</code>:
+            </p><p>
+                </p><pre class="programlisting">
+BASE_PACKAGE_ARCH = "core2"
+TARGET_CC_ARCH = "-m32 -march=core2 -msse3 -mtune=generic -mfpmath=sse"
+                </pre><p>
+            </p><p>
+                This example defines a new package architecture called "core2" and uses the
+                specified optimization flags, which are carefully chosen to give best
+                performance on atom processors.
+            </p><p>
+                The tune file would be included by the machine definition and can be
+                contained in the BSP or referenced from one of the standard core set of
+                files included with Poky itself.
+            </p><p>
+                Both the base package architecture file and the tune file are optional for a Poky BSP layer.
+            </p></div><div class="section" title="1.1.6. Miscellaneous Recipe Files"><div class="titlepage"><div><div><h3 class="title"><a id="bsp-filelayout-misc-recipes"></a>1.1.6. Miscellaneous Recipe Files</h3></div></div></div><pre class="programlisting">
+meta-&lt;bsp_name&gt;/recipes-bsp/*
+            </pre><p>
+                This optional directory contains miscellaneous recipe files for the BSP.
+                Most notably would be the formfactor files.
+                For example, in the crownbay BSP there is a <code class="filename">machconfig</code> file and a
+                <code class="filename">formfactor_0.0.bbappend</code> file:
+                </p><pre class="programlisting">
+meta-crownbay/recipes-bsp/formfactor/formfactor/crownbay/machconfig
+meta-crownbay/recipes-bsp/formfactor/formfactor_0.0.bbappend
+                </pre><p>
+            </p><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>
+                If a BSP does not have a formfactor entry, defaults are established according to
+                the configuration script.
+            </p></div></div><div class="section" title="1.1.7. Display Support Files"><div class="titlepage"><div><div><h3 class="title"><a id="bsp-filelayout-recipes-graphics"></a>1.1.7. Display Support Files</h3></div></div></div><pre class="programlisting">
+meta-&lt;bsp_name&gt;/recipes-graphics/*            
+            </pre><p>
+                This optional directory contains recipes for the BSP if it has 
+                special requirements for graphics support.
+                All files that are needed for the BSP to support a display are kept here. 
+                For example, in the crownbay BSP several display support files exist:
+                </p><pre class="programlisting">
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-config/crownbay/xcorg.conf
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-config_0.1.bbappend
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd-bin/.gitignore
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd-bin_1.7.99.2.bb
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd/crosscompile.patch
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd/fix_open_max_preprocessor_error.patch
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd/macro_tweak.patch
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd/nodolt.patch
+meta-crownbay/recipes-graphics/xorg-xserver/xserver-xf86-emgd_1.7.99.2.bb
+                </pre><p>
+            </p></div><div class="section" title="1.1.8. Linux Kernel Configuration"><div class="titlepage"><div><div><h3 class="title"><a id="bsp-filelayout-kernel"></a>1.1.8. Linux Kernel Configuration</h3></div></div></div><pre class="programlisting">
+meta-&lt;bsp_name&gt;/recipes-kernel/linux/linux-yocto_git.bbappend
+            </pre><p>
+                This file appends your specific changes to the kernel you are using.
+            </p><p>
+                For your BSP you typically want to use an existing Poky kernel found in the 
+                Poky repository at <code class="filename">meta/recipes-kernel/kernel</code>.
+                You can append your specific changes to the kernel recipe by using an append file, 
+                which is located in the 
+                <code class="filename">meta-&lt;bsp_name&gt;/recipes-kernel/linux</code> 
+                directory.
+            </p><p>
+                Suppose you use a BSP that uses the <code class="filename">linux-yocto_git.bb</code> kernel, 
+                which is the preferred kernel to use for developing a new BSP using the Yocto Project.
+                In other words, you have selected the kernel in your 
+                <code class="filename">&lt;bsp_name&gt;.conf</code> file by adding the following statement:
+                </p><pre class="programlisting">
+PREFERRED_PROVIDER_virtual/kernel ?= "linux-yocto"
+                </pre><p>
+                You would use the <code class="filename">linux-yocto_git.bbappend</code> file to append 
+                specific BSP settings to the kernel, thus configuring the kernel for your particular BSP.
+            </p><p>
+                Now take a look at the existing "crownbay" BSP.
+                The append file used is:
+                </p><pre class="programlisting">
+meta-crownbay/recipes-kernel/linux/linux-yocto_git.bbappend
+                </pre><p>
+                The file contains the following:
+                </p><pre class="programlisting">
+FILESEXTRAPATHS := "${THISDIR}/${PN}"
+COMPATIBLE_MACHINE_crownbay = "crownbay"
+KMACHINE_crownbay = "yocto/standard/crownbay"
+                </pre><p>
+                This append file adds "crownbay" as a compatible machine,
+                and additionally sets a Yocto Kernel-specific variable that identifies the name of the 
+                BSP branch to use in the GIT repository to find configuration information.
+            </p><p>
+                One thing missing in this particular BSP, which you will typically need when 
+                developing a BSP, is the kernel configuration (.config) for your BSP.
+                When developing a BSP, you probably have a kernel configuration file or a set of kernel
+                configuration files that, when taken together, define the kernel configuration for your BSP.
+                You can accomplish this definition by putting the configurations in a file or a set of files 
+                inside a directory located at the same level as your append file and having the same name 
+                as the kernel.
+                With all these conditions met simply reference those files in a SRC_URI statement in the append 
+                file.
+            </p><p>
+                For example, suppose you had a set of configuration options in a file called 
+                <code class="filename">defconfig</code>.  
+                If you put that file inside a directory named 
+                <code class="filename">/linux-yocto</code> and then added 
+                a SRC_URI statement such as the following to the append file, those configuration
+                options will be picked up and applied when the kernel is built.
+                </p><pre class="programlisting">
+SRC_URI += "file://defconfig"
+                </pre><p>
+            </p><p>
+                As mentioned earlier, you can group related configurations into multiple files and 
+                name them all in the SRC_URI statement as well.
+                For example, you could group separate configurations specifically for Ethernet and graphics
+                into their own files and add those by using a SRC_URI statement like the 
+                following in your append file:
+                </p><pre class="programlisting">
+SRC_URI += "file://defconfig \
+            file://eth.cfg \
+            file://gfx.cfg"
+                </pre><p>
+            </p><p>
+                The FILESEXTRAPATHS variable is in boilerplate form here in order to make it easy 
+                to do that.
+                It basically allows those configuration files to be found by the build process.
+            </p><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p>
+                Other methods exist to accomplish grouping and defining configuration options.
+                For example, you could directly add configuration options to the Yocto kernel 
+                <code class="filename">meta</code> branch for your BSP.
+                The configuration options will likely end up in that location anyway if the BSP gets 
+                added to the Yocto Project. 
+                For information on how to add these configurations directly, see the 
+                "Yocto Project Kernel Architecture and Use Manual" on the 
+                <a class="ulink" href="http://yoctoproject.org/community/documentation" target="_top">Yocto Project website
+                Documentation Page</a> 
+            </p><p>
+                In general, however, the Yocto Project maintainers take care of moving the SRC_URI-specified 
+                configuration options to the <code class="filename">meta</code> branch.
+                Not only is it easier for BSP developers to not have to worry about putting those 
+                configurations in the branch, but having the maintainers do it allows them to apply 
+                'global' knowledge about the kinds of common configuration options multiple BSPs in 
+                the tree are typically using.  
+                This allows for promotion of common configurations into common features.
+            </p></div></div></div><div class="section" title="1.2. BSP 'Click-Through' Licensing Procedure"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a id="bsp-click-through-licensing"></a>1.2. BSP 'Click-Through' Licensing Procedure</h2></div></div></div><div class="note" title="Note" style="margin-left: 0.5in; margin-right: 0.5in;"><h3 class="title">Note</h3><p> This section describes how
+		click-through licensing is expected to work.
+                Currently, this functionality is not yet implemented.
+            </p></div><p>
+	      In some cases, a BSP contains separately licensed IP
+	      (Intellectual Property) for a component that imposes
+	      upon the user a requirement to accept the terms of a
+	      'click-through' license.  
+              Once the license is accepted the
+	      Poky build system can then build and include the
+	      corresponding component in the final BSP image.  
+              Some affected components might be essential to the normal
+	      functioning of the system and have no 'free' replacement
+	      (i.e. the resulting system would be non-functional
+	      without them).
+              On the other hand, other components might be simply
+	      'good-to-have' or purely elective, or if essential
+	      nonetheless have a 'free' (possibly less-capable)
+	      version that could be used as a in the BSP recipe.
+            </p><p>
+	      For cases where you can substitute something and still maintain functionality, 
+              the Yocto Project website at 
+              <a class="ulink" href="http://yoctoproject.org/download/board-support-package-bsp-downloads" target="_top">http://yoctoproject.org/download/board-support-package-bsp-downloads</a> 
+              will make available a 'de-featured' BSP completely free of the encumbered IP.
+              In that case you can use the substitution directly and without any further licensing
+              requirements.  
+              If present, this fully 'de-featured' BSP will be named appropriately different 
+              than the normal encumbered BSP.
+              If available, this substitution is the simplest and most preferred option.
+              This, of course, assumes the resulting functionality meets requirements.
+            </p><p>
+	      If however, a non-encumbered version is unavailable or the 'free' version 
+              would provide unsuitable functionality or quality, you can use 
+              an encumbered version.  
+            </p><p>  
+              Several methods exist within the Poky build system to satisfy the licensing
+	      requirements for an encumbered BSP.
+              The following list describes them in preferential order:
+            </p><div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><p>
+		  Get a license key (or keys) for the encumbered BSP by visiting 
+                  a website and providing the name of the BSP and your email address
+                  through a web form.
+                </p><p>
+		  After agreeing to any applicable license terms, the
+		  BSP key(s) will be immediately sent to the address
+		  you gave and you can use them by specifying BSPKEY_&lt;keydomain&gt;
+		  environment variables when building the image:
+		</p><pre class="programlisting">
+		  $ BSPKEY_&lt;keydomain&gt;=&lt;key&gt; bitbake poky-image-sato
+		</pre><p>
+		  These steps allow the encumbered image to be built
+		  with no change at all to the normal build process.
+		</p><p>
+		  Equivalently and probably more conveniently, a line
+		  for each key can instead be put into the user's
+		  <code class="filename">local.conf</code> file.
+		</p><p>
+		  The &lt;keydomain&gt; component of the
+		  BSPKEY_&lt;keydomain&gt; is required because there
+		  might be multiple licenses in effect for a given BSP.
+                  In such cases, a given &lt;keydomain&gt; corresponds to
+		  a particular license.  In order for an encumbered
+		  BSP that encompasses multiple key domains to be built
+		  successfully, a &lt;keydomain&gt; entry for each
+		  applicable license must be present in <code class="filename">local.conf</code> or
+		  supplied on the command-line.
+		</p></li><li class="listitem"><p>
+		  Do nothing - build as you normally would.
+                  When a license is needed the build will stop and prompt you with instructions.
+                  Follow the license prompts that originate from the
+		  encumbered BSP.  
+                  These prompts usually take the form of instructions
+		  needed to manually fetch the encumbered package(s)
+		  and md5 sums into the required directory 
+                  (e.g. the <code class="filename">poky/build/downloads</code>).
+                  Once the manual package fetch has been
+		  completed, restart the build to continue where
+		  it left off.
+                  During the build the prompt will not appear again since you have satisfied the 
+                  requirement.
+		</p></li><li class="listitem"><p>
+		  Get a full-featured BSP recipe rather than a key.
+                  You can do this by visiting the applicable BSP download page from the Yocto 
+                  Project website at
+                  <a class="ulink" href="http://yoctoproject.org/download/board-support-package-bsp-downloads" target="_top">http://yoctoproject.org/download/board-support-package-bsp-downloads</a>.
+		  BSP tarballs that have proprietary information can be downloaded after agreeing 
+                  to licensing requirements as part of the download process. 
+                  Obtaining the code this way allows you to build an encumbered image with 
+                  no changes at all as compared to the normal build. 
+                </p></li></ol></div><p>
+	      Note that the third method is also the only option available
+	      when downloading pre-compiled images generated from non-free BSPs.  
+              Those images are likewise available at from the Yocto Project website.
+            </p></div></div>
+
+
+
+</div></body></html>
