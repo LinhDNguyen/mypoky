@@ -10,13 +10,15 @@ SRCREV = "v2011.03"
 PV = "v2011.03+git${SRCPV}"
 PR="r3"
 
-SRC_URI = "git://git.denx.de/u-boot.git;branch=master;protocol=git"
+#SRC_URI = "git://git.denx.de/u-boot.git;branch=master;protocol=git"
+SRC_URI = "file:///opt/programming/u-boot-master"
 
 UBOOT_MACHINE_beagleboard = "omap3_beagle_config"
 UBOOT_MACHINE_overo = "omap3_overo_config"
+UBOOT_MACHINE_imx28 = "mx28_evk_config"
 
 S = "${WORKDIR}/git"
 
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
-COMPATIBLE_MACHINE = "(beagleboard|overo)"
+COMPATIBLE_MACHINE = "(beagleboard|overo|imx28)"
