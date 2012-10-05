@@ -9,19 +9,23 @@ DEPENDS = "virtual/libx11 xproto glproto libxfixes"
 
 COMPATIBLE_HOST = '(x86_64.*|i.86.*)-(linux|freebsd.*)'
 
-SRC_URI = "git://git.o-hand.com/qemugl.git;protocol=git \
+SRC_URI = "git://git.yoctoproject.org/qemugl;protocol=git \
            file://versionfix.patch \
-           file://remove-x11r6-lib-dir.patch"
+           file://remove-x11r6-lib-dir.patch \
+           file://call_opengl_fix.patch \
+           file://extensions_emulation.patch"
 S = "${WORKDIR}/git"
 
+SRCREV = "d888bbc723c00d197d34a39b5b7448660ec1b1c0"
+
 PV = "0.0+git${SRCPV}"
-PR = "r7"
+PR = "r11"
 
 DEFAULT_PREFERENCE = "-1"
 
 do_install () {
 	install -d ${D}${libdir}/
-    if [ "${PN}" != "qemugl-nativesdk" ]; then
+    if [ "${PN}" != "nativesdk-qemugl" ]; then
         install -m 0755 ${S}/libGL.so.1.2 ${D}${libdir}/libGL-qemu.so.1.2
     else
 	    install -m 0755 ${S}/libGL.so.1.2 ${D}${libdir}/libGL.so.1.2
@@ -30,11 +34,17 @@ do_install () {
     fi
 }
 
+# This cannot be converted to run at pacakge install time, because
+# it depends on being run after the libgl1 package is installed,
+# and RPM cannot guarantee the order of pacakge insallation.
 pkg_postinst_${PN} () {
-    if [ "${PN}" != "qemugl-nativesdk" ]; then
-        rm -f $D${libdir}/libGL.so.1.2
-        ln -s libGL-qemu.so.1.2 $D${libdir}/libGL.so.1.2
-    fi
+#!/bin/sh -e
+if [ x"$D" = "x" ]; then
+	rm -f ${libdir}/libGL.so.1.2
+	ln -s libGL-qemu.so.1.2 ${libdir}/libGL.so.1.2
+else
+	exit 1
+fi
 }
 
 BBCLASSEXTEND = "nativesdk"

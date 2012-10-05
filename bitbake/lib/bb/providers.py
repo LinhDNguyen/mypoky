@@ -24,15 +24,53 @@
 import re
 import logging
 from bb import data, utils
+from collections import defaultdict
 import bb
 
 logger = logging.getLogger("BitBake.Provider")
 
-class NoProvider(Exception):
+class NoProvider(bb.BBHandledException):
     """Exception raised when no provider of a build dependency can be found"""
 
-class NoRProvider(Exception):
+class NoRProvider(bb.BBHandledException):
     """Exception raised when no provider of a runtime dependency can be found"""
+
+class MultipleRProvider(bb.BBHandledException):
+    """Exception raised when multiple providers of a runtime dependency can be found"""
+
+def findProviders(cfgData, dataCache, pkg_pn = None):
+    """
+    Convenience function to get latest and preferred providers in pkg_pn
+    """
+
+    if not pkg_pn:
+        pkg_pn = dataCache.pkg_pn
+
+    # Need to ensure data store is expanded
+    localdata = data.createCopy(cfgData)
+    bb.data.update_data(localdata)
+    bb.data.expandKeys(localdata)
+
+    preferred_versions = {}
+    latest_versions = {}
+
+    for pn in pkg_pn:
+        (last_ver, last_file, pref_ver, pref_file) = findBestProvider(pn, localdata, dataCache, pkg_pn)
+        preferred_versions[pn] = (pref_ver, pref_file)
+        latest_versions[pn] = (last_ver, last_file)
+
+    return (latest_versions, preferred_versions)
+
+
+def allProviders(dataCache):
+    """
+    Find all providers for each pn
+    """
+    all_providers = defaultdict(list)
+    for (fn, pn) in dataCache.pkg_fn.items():
+        ver = dataCache.pkg_pepvpr[fn]
+        all_providers[pn].append((ver, fn))
+    return all_providers
 
 
 def sortPriorities(pn, dataCache, pkg_pn = None):
@@ -84,10 +122,10 @@ def findPreferredProvider(pn, cfgData, dataCache, pkg_pn = None, item = None):
     preferred_ver = None
 
     localdata = data.createCopy(cfgData)
-    bb.data.setVar('OVERRIDES', "pn-%s:%s:%s" % (pn, pn, data.getVar('OVERRIDES', localdata)), localdata)
+    localdata.setVar('OVERRIDES', "%s:pn-%s:%s" % (data.getVar('OVERRIDES', localdata), pn, pn))
     bb.data.update_data(localdata)
 
-    preferred_v = bb.data.getVar('PREFERRED_VERSION_%s' % pn, localdata, True)
+    preferred_v = localdata.getVar('PREFERRED_VERSION', True)
     if preferred_v:
         m = re.match('(\d+:)*(.*)(_.*)*', preferred_v)
         if m:
@@ -124,6 +162,18 @@ def findPreferredProvider(pn, cfgData, dataCache, pkg_pn = None, item = None):
             itemstr = " (for item %s)" % item
         if preferred_file is None:
             logger.info("preferred version %s of %s not available%s", pv_str, pn, itemstr)
+            available_vers = []
+            for file_set in pkg_pn:
+                for f in file_set:
+                    pe, pv, pr = dataCache.pkg_pepvpr[f]
+                    ver_str = pv
+                    if pe:
+                        ver_str = "%s:%s" % (pe, ver_str)
+                    if not ver_str in available_vers:
+                        available_vers.append(ver_str)
+            if available_vers:
+                available_vers.sort()
+                logger.info("versions of %s available: %s", pn, ' '.join(available_vers))
         else:
             logger.debug(1, "selecting %s as PREFERRED_VERSION %s of package %s%s", preferred_file, pv_str, pn, itemstr)
 
@@ -236,7 +286,7 @@ def filterProviders(providers, item, cfgData, dataCache):
 
     eligible = _filterProviders(providers, item, cfgData, dataCache)
 
-    prefervar = bb.data.getVar('PREFERRED_PROVIDER_%s' % item, cfgData, 1)
+    prefervar = cfgData.getVar('PREFERRED_PROVIDER_%s' % item, True)
     if prefervar:
         dataCache.preferred[item] = prefervar
 
@@ -274,8 +324,8 @@ def filterProvidersRunTime(providers, item, cfgData, dataCache):
         pn = dataCache.pkg_fn[p]
         provides = dataCache.pn_provides[pn]
         for provide in provides:
-            prefervar = bb.data.getVar('PREFERRED_PROVIDER_%s' % provide, cfgData, 1)
-            logger.verbose("checking PREFERRED_PROVIDER_%s (value %s) against %s", provide, prefervar, pns.keys())
+            prefervar = cfgData.getVar('PREFERRED_PROVIDER_%s' % provide, True)
+            logger.debug(1, "checking PREFERRED_PROVIDER_%s (value %s) against %s", provide, prefervar, pns.keys())
             if prefervar in pns and pns[prefervar] not in preferred:
                 var = "PREFERRED_PROVIDER_%s = %s" % (provide, prefervar)
                 logger.verbose("selecting %s to satisfy runtime %s due to %s", prefervar, item, var)

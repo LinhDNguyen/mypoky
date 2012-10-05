@@ -4,14 +4,13 @@ HOMEPAGE = "http://setserial.sourceforge.net"
 AUTHOR = "Theodore Ts'o <tytso@mit.edu>"
 SECTION = "console/utils"
 
-# general GPL, no specific version
-LICENSE = "GPL"
+LICENSE = "GPLv2.0"
 LIC_FILES_CHKSUM = "file://version.h;beginline=1;endline=6;md5=2e7c59cb9e57e356ae81f50f4e4dfd99"
 PR = "r3"
 
 inherit autotools
 
-SRC_URI = "${SOURCEFORGE_MIRROR}/setserial/${PN}-${PV}.tar.gz \
+SRC_URI = "${SOURCEFORGE_MIRROR}/setserial/${BPN}-${PV}.tar.gz \
            file://add_stdlib.patch \
           "
 

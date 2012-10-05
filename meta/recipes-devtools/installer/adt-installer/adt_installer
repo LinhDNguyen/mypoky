@@ -48,7 +48,7 @@ usage ()
   echo_info "# Install Qemu:\t\t\t$YOCTOADT_QEMU"
   echo_info "# Install NFS utilities:\t$YOCTOADT_NFS_UTIL"
   #echo_info "# Install bitbake + UI:\t\t$YOCTOADT_BITBAKE"
-  #echo_info "# Install poky metadata:\t$YOCTOADT_METADATA"
+  #echo_info "# Install metadata:\t$YOCTOADT_METADATA"
   #echo_info "############################################################################\n"
 
     echo_info "\n##############################################################################"
@@ -170,7 +170,7 @@ if [ ! -x "$LOCAL_OPKG_LOC/bin/opkg-cl" ]; then
   check_result
 
   echo_info "Configure opkg ...\n"
-  ./autogen.sh --prefix=$parent_folder/$LOCAL_OPKG_LOC --with-opkglibdir=$OPKG_LIBDIR --disable-curl --disable-ssl-curl --disable-gpg --disable-shave >> $parent_folder/$YOCTOADT_INSTALL_LOG_FILE
+  ./autogen.sh --prefix=$parent_folder/$LOCAL_OPKG_LOC --with-opkglibdir=$OPKG_LIBDIR --enable-shared=no --disable-curl --disable-ssl-curl --disable-gpg --disable-shave >> $parent_folder/$YOCTOADT_INSTALL_LOG_FILE
   check_result
 
   echo_info "Make opkg ...\n"
@@ -228,7 +228,7 @@ if [ -f "$LOCAL_DOWNLOAD/$filename" ]; then
   fi
 fi
 echo_info "Downloading file: $filename..."
-wget "$YOCTOADT_IPKG_REPO/$1" -P $LOCAL_DOWNLOAD --progress=bar:force 2>&1 | tee -a "$YOCTOADT_INSTALL_LOG_FILE" 
+wget "$YOCTOADT_REPO/rootfs/$1" -P $LOCAL_DOWNLOAD --progress=bar:force 2>&1 | tee -a "$YOCTOADT_INSTALL_LOG_FILE" 
 }
 
 
@@ -241,7 +241,7 @@ get_qemu_image()
 
   if [ "$1" == "x86" ] || [ "$1" == "x86_64" ]; then
     qemu_kernel="bzImage-qemu$target.bin"
-  elif [ "$1" == "mips" ]; then
+  elif [ "$1" == "ppc" ] || [ "$1" == "mips" ]; then
     qemu_kernel="vmlinux-qemu$target.bin"
   else
     qemu_kernel="zImage-qemu$target.bin"
@@ -252,8 +252,8 @@ get_qemu_image()
   check_result
   
   for image_type in $select_rootfs; do
-    #echo_info "[ADT_INST] Downloading rootfs file: poky-image-$image_type-qemu$1.tar.bz2"
-    filename="poky-image-$image_type-qemu$target.tar.bz2"
+    #echo_info "[ADT_INST] Downloading rootfs file: core-image-$image_type-qemu$1.tar.bz2"
+    filename="core-image-$image_type-qemu$target.tar.bz2"
     download_file qemu$1/$filename
     check_result
   done
@@ -332,6 +332,21 @@ if [ -f "$YOCTOADT_INSTALL_LOG_FILE" ]; then
   rm $YOCTOADT_INSTALL_LOG_FILE
 fi
 
+echo -n "Please enter the install location (default: $DEFAULT_INSTALL_FOLDER): "
+read INSTALL_FOLDER
+
+if [ "$INSTALL_FOLDER" = "" ]; then
+    INSTALL_FOLDER=$DEFAULT_INSTALL_FOLDER
+fi
+
+eval INSTALL_FOLDER=$INSTALL_FOLDER
+if [ -d $INSTALL_FOLDER ]; then
+	export INSTALL_FOLDER=$(cd $INSTALL_FOLDER; pwd)
+else
+	export INSTALL_FOLDER=$(readlink -m $INSTALL_FOLDER)
+fi
+
+clear
 
 usage
 
@@ -339,6 +354,17 @@ user_inst_type="$?"
 
 validate_config
 check_result
+
+#check adt_repo exist
+wget $YOCTOADT_REPO 2>&1 | tee -a "$YOCTOADT_INSTALL_LOG_FILE"
+if grep -q "ERROR 404: Not Found" $YOCTOADT_INSTALL_LOG_FILE; then
+  echo -e "[ADT_INST] Error: YOCTOADT_REPO does not exist: $YOCTOADT_REPO"
+  echo -e "\n#############################################################################"
+  echo -e "# Meet error(s) when installing Yocto ADT! Please check log file for details. "
+  echo -e "#############################################################################\n"
+  exit -1
+fi
+
 #firstly we need to install opkg host
 install_opkg
 

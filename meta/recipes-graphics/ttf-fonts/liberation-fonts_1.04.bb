@@ -6,12 +6,13 @@ HOMEPAGE = "https://fedorahosted.org/liberation-fonts/"
 BUGTRACKER = "https://bugzilla.redhat.com/"
 
 SECTION = "x11/fonts"
-PRIORITY = "optional"
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://COPYING;md5=94d55d512a9ba36caa9b7df079bae19f"
-PACKAGE_ARCH = "all"
-RDEPENDS = "fontconfig-utils"
+RDEPENDS_${PN} = "fontconfig-utils"
+PR = "r2"
 PE = "1"
+
+inherit allarch
 
 SRC_URI = "https://fedorahosted.org/releases/l/i/liberation-fonts/liberation-fonts-${PV}.tar.gz \
            file://30-liberation-aliases.conf"
@@ -34,6 +35,9 @@ do_install () {
 
 pkg_postinst_${PN} () {
 #!/bin/sh
+if [ "x$D" != "x" ] ; then
+	exit 1
+fi
 fc-cache
 }
 

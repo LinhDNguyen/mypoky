@@ -30,11 +30,6 @@ Commands are queued in a CommandQueue
 
 import bb.event
 import bb.cooker
-import bb.data
-
-async_cmds = {}
-sync_cmds = {}
-
 
 class CommandCompleted(bb.event.Event):
     pass
@@ -61,16 +56,6 @@ class Command:
         # FIXME Add lock for this
         self.currentAsyncCommand = None
 
-        for attr in CommandsSync.__dict__:
-            command = attr[:].lower()
-            method = getattr(CommandsSync, attr)
-            sync_cmds[command] = (method)
-
-        for attr in CommandsAsync.__dict__:
-            command = attr[:].lower()
-            method = getattr(CommandsAsync, attr)
-            async_cmds[command] = (method)
-
     def runCommand(self, commandline):
         try:
             command = commandline.pop(0)
@@ -82,7 +67,7 @@ class Command:
             if command not in CommandsAsync.__dict__:
                 return "No such command"
             self.currentAsyncCommand = (command, commandline)
-            self.cooker.server.register_idle_function(self.cooker.runCommands, self.cooker)
+            self.cooker.server_registration_cb(self.cooker.runCommands, self.cooker)
             return True
         except:
             import traceback
@@ -113,9 +98,12 @@ class Command:
             else:
                 self.finishAsyncCommand("Exited with %s" % arg)
             return False
-        except Exception:
+        except Exception as exc:
             import traceback
-            self.finishAsyncCommand(traceback.format_exc())
+            if isinstance(exc, bb.BBHandledException):
+                self.finishAsyncCommand("")
+            else:
+                self.finishAsyncCommand(traceback.format_exc())
             return False
 
     def finishAsyncCommand(self, msg=None, code=None):
@@ -162,16 +150,41 @@ class CommandsSync:
         if len(params) > 1:
             expand = params[1]
 
-        return bb.data.getVar(varname, command.cooker.configuration.data, expand)
+        return command.cooker.configuration.data.getVar(varname, expand)
 
     def setVariable(self, command, params):
         """
         Set the value of variable in configuration.data
         """
         varname = params[0]
-        value = params[1]
-        bb.data.setVar(varname, value, command.cooker.configuration.data)
+        value = str(params[1])
+        command.cooker.configuration.data.setVar(varname, value)
 
+    def initCooker(self, command, params):
+        """
+        Init the cooker to initial state with nothing parsed
+        """
+        command.cooker.initialize()
+
+    def resetCooker(self, command, params):
+        """
+        Reset the cooker to its initial state, thus forcing a reparse for
+        any async command that has the needcache property set to True
+        """
+        command.cooker.reset()
+
+    def getCpuCount(self, command, params):
+        """
+        Get the CPU count on the bitbake server
+        """
+        return bb.utils.cpu_count()
+
+    def setConfFilter(self, command, params):
+        """
+        Set the configuration file parsing filter
+        """
+        filterfunc = params[0]
+        bb.parse.parse_py.ConfHandler.confFilters.append(filterfunc)
 
 class CommandsAsync:
     """
@@ -224,13 +237,29 @@ class CommandsAsync:
 
     def generateTargetsTree(self, command, params):
         """
-        Generate a tree of all buildable targets.
+        Generate a tree of buildable targets.
+        If klass is provided ensure all recipes that inherit the class are
+        included in the package list.
+        If pkg_list provided use that list (plus any extras brought in by
+        klass) rather than generating a tree for all packages.
         """
         klass = params[0]
+        pkg_list = params[1]
 
-        command.cooker.generateTargetsTree(klass)
+        command.cooker.generateTargetsTree(klass, pkg_list)
         command.finishAsyncCommand()
     generateTargetsTree.needcache = True
+
+    def findCoreBaseFiles(self, command, params):
+        """
+        Find certain files in COREBASE directory. i.e. Layers
+        """
+        subdir = params[0]
+        filename = params[1]
+
+        command.cooker.findCoreBaseFiles(subdir, filename)
+        command.finishAsyncCommand()
+    findCoreBaseFiles.needcache = False
 
     def findConfigFiles(self, command, params):
         """
@@ -241,7 +270,29 @@ class CommandsAsync:
 
         command.cooker.findConfigFiles(varname)
         command.finishAsyncCommand()
-    findConfigFiles.needcache = True
+    findConfigFiles.needcache = False
+
+    def findFilesMatchingInDir(self, command, params):
+        """
+        Find implementation files matching the specified pattern
+        in the requested subdirectory of a BBPATH
+        """
+        pattern = params[0]
+        directory = params[1]
+
+        command.cooker.findFilesMatchingInDir(pattern, directory)
+        command.finishAsyncCommand()
+    findFilesMatchingInDir.needcache = False
+
+    def findConfigFilePath(self, command, params):
+        """
+        Find the path of the requested configuration file
+        """
+        configfile = params[0]
+
+        command.cooker.findConfigFilePath(configfile)
+        command.finishAsyncCommand()
+    findConfigFilePath.needcache = False
 
     def showVersions(self, command, params):
         """
@@ -281,6 +332,14 @@ class CommandsAsync:
         command.finishAsyncCommand()
     parseFiles.needcache = True
 
+    def reparseFiles(self, command, params):
+        """
+        Reparse .bb files
+        """
+        command.cooker.reparseFiles()
+        command.finishAsyncCommand()
+    reparseFiles.needcache = True
+
     def compareRevisions(self, command, params):
         """
         Parse the .bb files
@@ -290,3 +349,23 @@ class CommandsAsync:
         else:
             command.finishAsyncCommand()
     compareRevisions.needcache = True
+
+    def parseConfigurationFiles(self, command, params):
+        """
+        Parse the configuration files
+        """
+        prefiles = params[0]
+        postfiles = params[1]
+        command.cooker.parseConfigurationFiles(prefiles, postfiles)
+        command.finishAsyncCommand()
+    parseConfigurationFiles.needcache = False
+
+    def triggerEvent(self, command, params):
+        """
+        Trigger a certain event
+        """
+        event = params[0]
+        bb.event.fire(eval(event), command.cooker.configuration.data)
+        command.currentAsyncCommand = None
+    triggerEvent.needcache = False
+

@@ -1,4 +1,4 @@
-require xf86-video-common.inc
+require xorg-driver-video.inc
 
 SUMMARY = "X.Org X server -- Intel integrated graphics chipsets driver"
 
@@ -10,8 +10,9 @@ Infrastructure (DRI)."
 DEPENDS += "virtual/libx11 libxvmc drm dri2proto glproto \
 	    virtual/libgl xineramaproto libpciaccess"
 
+SRCREV = "87ea531c5dc5b39809395b277c330854aaaaf019"
 PV = "2.10.0+git${SRCPV}"
-PR = "r0"
+PR = "${INC_PR}.0"
 
 EXTRA_OECONF += "--disable-xvmc --enable-dri --disable-static"
 

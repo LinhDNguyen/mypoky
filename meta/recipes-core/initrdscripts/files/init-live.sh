@@ -1,17 +1,26 @@
 #!/bin/sh
 
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
 ROOT_MOUNT="/rootfs/"
-ROOT_IMAGE=rootfs.img
+ROOT_IMAGE="rootfs.img"
 MOUNT="/bin/mount"
 UMOUNT="/bin/umount"
+ISOLINUX=""
+UNIONFS="no"
 
 early_setup() {
-    mkdir /proc
-    mkdir /sys
+    mkdir -p /proc
+    mkdir -p /sys
     mount -t proc proc /proc
     mount -t sysfs sysfs /sys
+
+    # support modular kernel
+    modprobe isofs 2> /dev/null
+
+    mkdir -p /run
     udevd --daemon
-    /sbin/udevadm trigger --action=add
+    udevadm trigger --action=add
 }
 
 read_args() {
@@ -22,21 +31,31 @@ read_args() {
             root=*)
                 ROOT_DEVICE=$optarg ;;
             rootfstype=*)
-                ROOT_FSTYPE=$optarg ;;
-            rootdelay=*)
-                rootdelay=$optarg ;;
-	    LABEL=*)
-		label=$optarg ;;
-	    video=*)
-		video_mode=$arg ;;
-	    vga=*)
-		vga_mode=$arg ;;
+                modprobe $optarg 2> /dev/null ;;
+            LABEL=*)
+                label=$optarg ;;
+            video=*)
+                video_mode=$arg ;;
+            vga=*)
+                vga_mode=$arg ;;
+            console=*)
+                if [ -z "${console_params}" ]; then
+                    console_params=$arg
+                else
+                    console_params="$console_params $arg"
+                fi
         esac
     done
 }
 
 boot_live_root() {
-    killall udevd
+    killall udevd 2>/dev/null
+
+    # use devtmpfs if available
+    if grep -q devtmpfs /proc/filesystems; then
+        mount -t devtmpfs devtmpfs $ROOT_MOUNT/dev
+    fi
+
     cd $ROOT_MOUNT
     exec switch_root -c /dev/console $ROOT_MOUNT /sbin/init
 }
@@ -58,8 +77,12 @@ while true
 do
   for i in `ls /media 2>/dev/null`; do
       if [ -f /media/$i/$ROOT_IMAGE ] ; then
-	  found="yes"
-	  break
+		found="yes"
+		break
+	  elif [ -f /media/$i/isolinux/$ROOT_IMAGE ]; then
+		found="yes"
+		ISOLINUX="isolinux"
+		break	
       fi
   done
   if [ "$found" = "yes" ]; then
@@ -71,23 +94,36 @@ done
 case $label in
     boot)
 	mkdir $ROOT_MOUNT
-	mknod /dev/loop0 b 7 0
+	mknod /dev/loop0 b 7 0 2>/dev/null
 
-	if ! $MOUNT -o rw,loop,noatime,nodiratime /media/$i/$ROOT_IMAGE $ROOT_MOUNT ; then
-	    fatal "Couldnt mount rootfs image"
+	
+	if [ "$UNIONFS" = "yes" ]; then
+	    mkdir /rootfs-tmp
+
+	    if ! $MOUNT -o rw,loop,noatime,nodiratime /media/$i/$ISOLINUX/$ROOT_IMAGE /rootfs-tmp ; then
+		fatal "Could not mount rootfs image"
+	    else
+		mkdir /cow
+		mount -t tmpfs -o rw,noatime,mode=755 tmpfs /cow
+		mount -t unionfs -o dirs=/cow:/rootfs-tmp=ro unionfs $ROOT_MOUNT
+		boot_live_root
+	    fi
 	else
-	    boot_live_root
+	    if ! $MOUNT -o rw,loop,noatime,nodiratime /media/$i/$ISOLINUX/$ROOT_IMAGE $ROOT_MOUNT ; then
+		fatal "Could not mount rootfs image"
+	    else
+		boot_live_root
+	    fi
 	fi
 	;;
-    install)
-	if [ -f /media/$i/$ROOT_IMAGE ] ; then
-	    ./install.sh $i $ROOT_IMAGE $video_mode $vga_mode
+    install|install-efi)
+	if [ -f /media/$i/$ISOLINUX/$ROOT_IMAGE ] ; then
+	    ./$label.sh $i/$ISOLINUX $ROOT_IMAGE $video_mode $vga_mode $console_params
 	else
-	    fatal "Couldnt find install script"
+	    fatal "Could not find $label script"
 	fi
 
 	# If we're getting here, we failed...
 	fatal "Installation image failed"
 	;;
 esac
-

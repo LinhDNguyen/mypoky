@@ -8,28 +8,25 @@
 # SDK packages are built either explicitly by the user,
 # or indirectly via dependency.  No need to be in 'world'.
 EXCLUDE_FROM_WORLD = "1"
-
-STAGING_BINDIR_TOOLCHAIN = "${STAGING_DIR_NATIVE}${bindir_native}/${SDK_ARCH}${SDK_VENDOR}-${SDK_OS}:${STAGING_DIR_NATIVE}${bindir_native}/${OLD_PACKAGE_ARCH}${TARGET_VENDOR}-${TARGET_OS}"
+CLASSOVERRIDE = "class-cross-canadian"
+STAGING_BINDIR_TOOLCHAIN = "${STAGING_DIR_NATIVE}${bindir_native}/${SDK_ARCH}${SDK_VENDOR}-${SDK_OS}:${STAGING_DIR_NATIVE}${bindir_native}/${TUNE_PKGARCH}${TARGET_VENDOR}-${TARGET_OS}"
 
 #
 # Update BASE_PACKAGE_ARCH and PACKAGE_ARCHS
 #
-OLD_MULTIMACH_ARCH := "${MULTIMACH_ARCH}"
-OLD_MULTIMACH_TARGET_SYS := "${MULTIMACH_TARGET_SYS}"
-OLD_PACKAGE_ARCH := ${BASE_PACKAGE_ARCH}
-BASE_PACKAGE_ARCH = "${SDK_ARCH}-nativesdk"
+PACKAGE_ARCH = "${SDK_ARCH}-nativesdk"
 python () {
-    archs = bb.data.getVar('PACKAGE_ARCHS', d, True).split()
+    archs = d.getVar('PACKAGE_ARCHS', True).split()
     sdkarchs = []
     for arch in archs:
         sdkarchs.append(arch + '-nativesdk')
-    bb.data.setVar('PACKAGE_ARCHS', " ".join(sdkarchs), d)
+    d.setVar('PACKAGE_ARCHS', " ".join(sdkarchs))
 }
-MULTIMACH_TARGET_SYS = "${MULTIMACH_ARCH}${HOST_VENDOR}-${HOST_OS}"
+MULTIMACH_TARGET_SYS = "${PACKAGE_ARCH}${HOST_VENDOR}-${HOST_OS}"
 
 INHIBIT_DEFAULT_DEPS = "1"
 
-STAGING_DIR_HOST = "${STAGING_DIR}/${HOST_SYS}-nativesdk"
+STAGING_DIR_HOST = "${STAGING_DIR}/${HOST_ARCH}-nativesdk${HOST_VENDOR}-${HOST_OS}"
 
 TOOLCHAIN_OPTIONS = " --sysroot=${STAGING_DIR}/${HOST_ARCH}-nativesdk${HOST_VENDOR}-${HOST_OS}"
 
@@ -42,6 +39,8 @@ HOST_VENDOR = "${SDK_VENDOR}"
 HOST_OS = "${SDK_OS}"
 HOST_PREFIX = "${SDK_PREFIX}"
 HOST_CC_ARCH = "${SDK_CC_ARCH}"
+HOST_LD_ARCH = "${SDK_LD_ARCH}"
+HOST_AS_ARCH = "${SDK_AS_ARCH}"
 
 #assign DPKG_ARCH
 DPKG_ARCH = "${SDK_ARCH}"
@@ -49,9 +48,11 @@ DPKG_ARCH = "${SDK_ARCH}"
 CPPFLAGS = "${BUILDSDK_CPPFLAGS}"
 CFLAGS = "${BUILDSDK_CFLAGS}"
 CXXFLAGS = "${BUILDSDK_CFLAGS}"
-LDFLAGS = "${BUILDSDK_LDFLAGS}"
+LDFLAGS = "${BUILDSDK_LDFLAGS} \
+           -Wl,-rpath-link,${STAGING_LIBDIR}/.. \
+           -Wl,-rpath,${libdir}/.. "
 
-DEPENDS_GETTEXT = "gettext-native gettext-nativesdk"
+DEPENDS_GETTEXT = "gettext-native nativesdk-gettext"
 
 # Path mangling needed by the cross packaging
 # Note that we use := here to ensure that libdir and includedir are
@@ -66,12 +67,12 @@ target_exec_prefix := "${exec_prefix}"
 base_prefix = "${SDKPATHNATIVE}"
 prefix = "${SDKPATHNATIVE}${prefix_nativesdk}"
 exec_prefix = "${SDKPATHNATIVE}${prefix_nativesdk}"
-bindir = "${exec_prefix}/bin/${OLD_MULTIMACH_ARCH}${TARGET_VENDOR}-${TARGET_OS}"
+bindir = "${exec_prefix}/bin/${TUNE_PKGARCH}${TARGET_VENDOR}-${TARGET_OS}"
 sbindir = "${bindir}"
 base_bindir = "${bindir}"
 base_sbindir = "${bindir}"
-libdir = "${exec_prefix}/lib/${OLD_MULTIMACH_ARCH}${TARGET_VENDOR}-${TARGET_OS}"
-libexecdir = "${exec_prefix}/libexec/${OLD_MULTIMACH_ARCH}${TARGET_VENDOR}-${TARGET_OS}"
+libdir = "${exec_prefix}/lib/${TUNE_PKGARCH}${TARGET_VENDOR}-${TARGET_OS}"
+libexecdir = "${exec_prefix}/libexec/${TUNE_PKGARCH}${TARGET_VENDOR}-${TARGET_OS}"
 
 FILES_${PN} = "${prefix}"
 FILES_${PN}-dbg += "${prefix}/.debug \

@@ -9,12 +9,23 @@ LICENSE = "LGPLv2 & LGPLv2+ & LGPLv2.1+"
 LIC_FILES_CHKSUM = "file://COPYING;md5=3bf50002aefd002f49e7bb854063f7e7"
 
 SECTION = "libs"
-PRIORITY = "optional"
-DEPENDS = "glib-2.0 pango atk jpeg libpng libxext libxcursor \
-           gtk-doc-native docbook-utils-native libxrandr libgcrypt \
-           libxdamage libxrender libxcomposite cairo gdk-pixbuf"
 
-inherit autotools pkgconfig
+X11DEPENDS = "virtual/libx11 libxext libxcursor libxrandr libxdamage libxrender libxcomposite"
+DEPENDS = "glib-2.0 pango atk jpeg libpng gdk-pixbuf-native docbook-utils-native \
+ libgcrypt cairo gdk-pixbuf"
+
+PACKAGECONFIG ??= "${@base_contains('DISTRO_FEATURES', 'x11', 'x11', '', d)} \
+ ${@base_contains('DISTRO_FEATURES', 'gtk-directfb', 'gtk-directfb', '', d)}"
+
+# for gtk+ 2.x, have to pick either x11 or directfb not both
+# for gtk+ 3.x, PACKAGECONFIG[gtk-directfb] should be removed because directfb will not be support as
+# a backend.
+PACKAGECONFIG[x11] = "--with-x=yes --with-gdktarget=x11,--with-x=no,${X11DEPENDS}"
+PACKAGECONFIG[gtk-directfb] = "--with-gdktarget=directfb,,directfb"
+
+inherit autotools gtk-doc pkgconfig
+
+PACKAGES += "libgail gtk-demo"
 
 FILES_${PN} = "${bindir}/gtk-update-icon-cache \
 	${bindir}/gtk-query-immodules-2.0 \
@@ -25,26 +36,35 @@ FILES_${PN} = "${bindir}/gtk-update-icon-cache \
 FILES_${PN}-dev += " \
         ${datadir}/gtk-2.0/include \
 	${libdir}/gtk-2.0/include \
+	${libdir}/gtk-2.0/modules/*.la \
 	${libdir}/gtk-2.0/${LIBV}/loaders/*.la \
 	${libdir}/gtk-2.0/${LIBV}/immodules/*.la \
+	${libdir}/gtk-2.0/${LIBV}/printbackends/*.la \
 	${libdir}/gtk-2.0/${LIBV}/engines/*.la \
 	${bindir}/gtk-builder-convert"
 
 FILES_${PN}-dbg += " \
+	${libdir}/gtk-2.0/modules/.debug/* \
         ${libdir}/gtk-2.0/${LIBV}/loaders/.debug/* \
 	${libdir}/gtk-2.0/${LIBV}/immodules/.debug/* \
 	${libdir}/gtk-2.0/${LIBV}/engines/.debug/* \
 	${libdir}/gtk-2.0/${LIBV}/printbackends/.debug/*"
 
-BASE_RRECOMMENDS = "ttf-dejavu-sans"
-BASE_RRECOMMENDS_angstrom = "ttf-dejavu-sans gdk-pixbuf-loader-png gdk-pixbuf-loader-jpeg gdk-pixbuf-loader-gif gdk-pixbuf-loader-xpm"
-BASE_RRECOMMENDS_poky = "gdk-pixbuf-loader-png gdk-pixbuf-loader-jpeg gdk-pixbuf-loader-gif gdk-pixbuf-loader-xpm shared-mime-info"
+FILES_gtk-demo = " \
+ ${datadir}/gtk-2.0/demo/* \
+ ${bindir}/gtk-demo \
+ "
 
-GLIBC_RRECOMMENDS= "${BASE_RRECOMMENDS} glibc-gconv-iso8859-1"
+FILES_libgail = " \
+	${libdir}/gtk-2.0/modules/libgail.so \
+	${libdir}/gtk-2.0/modules/libferret.so \
+	"
 
-RRECOMMENDS_${PN} = "${BASE_RRECOMMENDS}"
-RRECOMMENDS_${PN}_linux = "${GLIBC_RRECOMMENDS}"
-RRECOMMENDS_${PN}_linux-gnueabi = "${GLIBC_RRECOMMENDS}"
+GTKBASE_RRECOMMENDS ?= "liberation-fonts gdk-pixbuf-loader-png gdk-pixbuf-loader-jpeg gdk-pixbuf-loader-gif gdk-pixbuf-loader-xpm shared-mime-info"
+GTKGLIBC_RRECOMMENDS ?= "${GTKBASE_RRECOMMENDS} glibc-gconv-iso8859-1"
+
+RRECOMMENDS_${PN} = "${GTKBASE_RRECOMMENDS}"
+RRECOMMENDS_${PN}_libc-glibc = "${GTKGLIBC_RRECOMMENDS}"
 
 do_install () {
 	autotools_do_install

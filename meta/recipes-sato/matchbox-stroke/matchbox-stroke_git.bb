@@ -7,13 +7,13 @@ LIC_FILES_CHKSUM = "file://src/matchbox-stroke.h;endline=12;md5=8ed5c5bbec2321fb
 
 DEPENDS = "libfakekey expat libxft"
 SECTION = "x11/wm"
+SRCREV = "2b772583b61d2f6e8358e7c80e10293fc27cfcb7"
 PV = "0.0+git${SRCPV}"
 PR = "r0"
 
-SRC_URI = "git://git.pokylinux.org/${PN};protocol=git \
-           file://single-instance.patch;patch=1 \
-           file://configure_fix.patch;patch=1;maxrev=1819 \
-           file://dso_linking_change_build_fix.patch "
+SRC_URI = "git://git.yoctoproject.org/${BPN};protocol=git \
+           file://single-instance.patch \
+           file://configure_fix.patch;maxrev=1819"
 
 S = "${WORKDIR}/git"
 

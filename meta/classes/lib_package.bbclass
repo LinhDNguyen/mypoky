@@ -1,10 +1,7 @@
-PACKAGES += "${PN}-bin"
-
-FILES_${PN} = "${libexecdir} ${libdir}/lib*${SOLIBS} \
-	    ${sysconfdir} ${sharedstatedir} ${localstatedir} \
-	    ${base_libdir}/*${SOLIBS} \
-	    ${datadir}/${PN} ${libdir}/${PN}"
-FILES_${PN}-dev = "${includedir} ${libdir}/lib*${SOLIBSDEV} ${libdir}/*.la \
-		${libdir}/*.a ${libdir}/pkgconfig /lib/*.a /lib/*.o \
-		${datadir}/aclocal ${bindir}/*-config"
-FILES_${PN}-bin = "${bindir}/* ${sbindir}/* /bin/* /sbin/*"
+#
+# ${PN}-bin is defined in bitbake.conf
+#
+# We need to allow the other packages to be greedy with what they
+# want out of /bin and /usr/bin before ${PN}-bin gets greedy.
+# 
+PACKAGE_BEFORE_PN = "${PN}-bin"

@@ -10,32 +10,30 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=751419260aa954499f7abaabaa882bbe \
                     file://lzw.h;endline=19;md5=c273e09a02edd9801cc74d39683049e9 "
 
 SRC_URI = "${GNU_MIRROR}/gzip/gzip-${PV}.tar.gz \
-           file://m4-extensions-fix.patch;patch=1 \
-           file://dup-def-fix.patch;patch=1"
+           file://m4-extensions-fix.patch \
+           file://dup-def-fix.patch"
 
-PR = "r0"
+SRC_URI[md5sum] = "b5bac2d21840ae077e0217bc5e4845b1"
+SRC_URI[sha256sum] = "3f565be05f7f3d1aff117c030eb7c738300510b7d098cedea796ca8e4cd587af"
+
+PR = "r2"
 
 inherit autotools
 
-do_install () {
-	autotools_do_install
+do_install_append () {
 	# move files into /bin (FHS)
 	install -d ${D}${base_bindir}
-	mv ${D}${bindir}/gunzip ${D}${base_bindir}/gunzip.${PN}
-	mv ${D}${bindir}/gzip ${D}${base_bindir}/gzip.${PN}
-	mv ${D}${bindir}/zcat ${D}${base_bindir}/zcat.${PN}
+	mv ${D}${bindir}/gunzip ${D}${base_bindir}/gunzip
+	mv ${D}${bindir}/gzip ${D}${base_bindir}/gzip
+	mv ${D}${bindir}/zcat ${D}${base_bindir}/zcat
 }
 
-pkg_postinst_${PN} () {
-	update-alternatives --install ${base_bindir}/gunzip gunzip gunzip.${PN} 100
-	update-alternatives --install ${base_bindir}/gzip gzip gzip.${PN} 100
-	update-alternatives --install ${base_bindir}/zcat zcat zcat.${PN} 100
-}
+inherit update-alternatives
 
-pkg_prerm_${PN} () {
-	update-alternatives --remove gunzip gunzip.${PN}
-	update-alternatives --remove gzip gzip.${PN}
-	update-alternatives --remove zcat zcat.${PN}
-}
+ALTERNATIVE_${PN} = "gzip gunzip zcat"
+ALTERNATIVE_LINK_NAME[gzip] = "${base_bindir}/gzip"
+ALTERNATIVE_LINK_NAME[gunzip] = "${base_bindir}/gunzip"
+ALTERNATIVE_LINK_NAME[zcat] = "${base_bindir}/zcat"
+ALTERNATIVE_PRIORITY = "100"
 
 BBCLASSEXTEND = "native"

@@ -1,4 +1,11 @@
-FEED_ARCH = "armv4t"
-BASE_PACKAGE_ARCH = "armv4t" 
-TARGET_CC_ARCH = "-march=armv4t -mtune=arm920t"
-PACKAGE_EXTRA_ARCHS += "armv4 armv4t"
+DEFAULTTUNE ?= "arm920t"
+
+require conf/machine/include/arm/arch-armv4.inc
+
+TUNEVALID[arm920t] = "Enable arm920t specific processor optimizations"
+TUNE_CCARGS += "${@bb.utils.contains("TUNE_FEATURES", "arm920t", "-mtune=arm920t", "", d)}"
+
+AVAILTUNES += "arm920t"
+TUNE_FEATURES_tune-arm920t = "${TUNE_FEATURES_tune-armv4t} arm920t"
+PACKAGE_EXTRA_ARCHS_tune-arm920t = "${PACKAGE_EXTRA_ARCHS_tune-armv4t}"
+

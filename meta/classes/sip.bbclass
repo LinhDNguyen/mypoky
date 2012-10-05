@@ -1,11 +1,16 @@
 # Build Class for Sip based Python Bindings
 # (C) Michael 'Mickey' Lauer <mickey@Vanille.de>
 #
+STAGING_SIPDIR ?= "${STAGING_DATADIR_NATIVE}/sip"
+
 DEPENDS  =+ "sip-native"
 RDEPENDS += "python-sip"
 
 # default stuff, do not uncomment
 # EXTRA_SIPTAGS = "-tWS_X11 -tQt_4_3_0"
+
+# do_generate is before do_configure so ensure that sip_native is populated in sysroot before executing it
+do_generate[depends] += "sip-native:do_populate_sysroot"
 
 sip_do_generate() {
 	if [ -z "${SIP_MODULES}" ]; then 
@@ -17,7 +22,7 @@ sip_do_generate() {
 	if [ -z "$MODULES" ]; then
 		die "SIP_MODULES not set and no modules found in $PWD"
         else
-		oenote "using modules '${SIP_MODULES}' and tags '${EXTRA_SIPTAGS}'"
+		bbnote "using modules '${SIP_MODULES}' and tags '${EXTRA_SIPTAGS}'"
 	fi
 
 	if [ -z "${EXTRA_SIPTAGS}" ]; then
@@ -28,7 +33,7 @@ sip_do_generate() {
 
 	if [ ! -z "${SIP_FEATURES}" ]; then
 		FEATURES="-z ${SIP_FEATURES}"
-		oenote "sip feature file: ${SIP_FEATURES}"
+		bbnote "sip feature file: ${SIP_FEATURES}"
 	fi
 
 	for module in $MODULES

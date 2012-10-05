@@ -8,74 +8,55 @@
 
 python __anonymous () {
     import bb, re
-    uc_os = (re.match('.*uclibc*', bb.data.getVar('TARGET_OS', d, 1)) != None)
+    uc_os = (re.match('.*uclibc*', d.getVar('TARGET_OS', True)) != None)
     if uc_os:
         raise bb.parse.SkipPackage("incompatible with target %s" %
-                                   bb.data.getVar('TARGET_OS', d, 1))
+                                   d.getVar('TARGET_OS', True))
 }
-
-# Binary locales are generated at build time if ENABLE_BINARY_LOCALE_GENERATION
-# is set. The idea is to avoid running localedef on the target (at first boot)
-# to decrease initial boot time and avoid localedef being killed by the OOM
-# killer which used to effectively break i18n on machines with < 128MB RAM.
-
-# default to disabled 
-ENABLE_BINARY_LOCALE_GENERATION ?= "0"
-ENABLE_BINARY_LOCALE_GENERATION_pn-eglibc-nativesdk = "0"
-
-#enable locale generation on these arches
-# BINARY_LOCALE_ARCHES is a space separated list of regular expressions
-BINARY_LOCALE_ARCHES ?= "arm.* i[3-6]86 x86_64 powerpc mips"
-
-# set "1" to use cross-localedef for locale generation
-# set "0" for qemu emulation of native localedef for locale generation
-LOCALE_GENERATION_WITH_CROSS-LOCALEDEF = "1"
 
 # Set this to zero if you don't want ldconfig in the output package
 USE_LDCONFIG ?= "1"
 
-PKGSUFFIX = ""
-PKGSUFFIX_virtclass-nativesdk = "-nativesdk"
+PACKAGES = "${PN}-dbg catchsegv sln nscd ldd ${PN}-mtrace ${PN}-utils eglibc-thread-db ${PN}-pic libcidn libmemusage libsegfault ${PN}-pcprofile libsotruss ${PN} eglibc-extra-nss ${PN}-dev ${PN}-staticdev ${PN}-doc"
 
-PACKAGES = "${PN}-dbg ${PN} catchsegv${PKGSUFFIX} sln${PKGSUFFIX} nscd${PKGSUFFIX} ldd${PKGSUFFIX} localedef${PKGSUFFIX} ${PN}-utils ${PN}-pic ${PN}-dev eglibc-doc eglibc-locale libcidn libmemusage libsegfault${PKGSUFFIX} eglibc-extra-nss eglibc-thread-db${PKGSUFFIX} eglibc-pcprofile"
-
-PACKAGES_DYNAMIC = " \
-		    glibc-gconv-*${PKGSUFFIX} glibc-charmap-* glibc-localedata-* glibc-binary-localedata-* \
-		    eglibc-gconv-* eglibc-charmap-* eglibc-localedata-* eglibc-binary-localedata-* \
-		    locale-base-*${PKGSUFFIX}"
-
-RPROVIDES_eglibc = "glibc"
-RPROVIDES_eglibc-utils = "glibc-utils"
-RPROVIDES_eglibc-pic = "glibc-pic"
-RPROVIDES_eglibc-dev = "glibc-dev"
-RPROVIDES_eglibc-doc = "glibc-doc"
-RPROVIDES_eglibc-locale = "glibc-locale"
+# The ld.so in this eglibc supports the GNU_HASH
+RPROVIDES_${PN} = "glibc rtld(GNU_HASH)"
+RPROVIDES_${PN}-utils = "glibc-utils"
+RPROVIDES_${PN}-mtrace = "glibc-mtrace libc-mtrace"
+RPROVIDES_${PN}-pic = "glibc-pic"
+RPROVIDES_${PN}-dev = "glibc-dev"
+RPROVIDES_${PN}-staticdev = "glibc-staticdev"
+RPROVIDES_${PN}-doc = "glibc-doc"
 RPROVIDES_eglibc-extra-nss = "glibc-extra-nss"
 RPROVIDES_eglibc-thread-db = "glibc-thread-db"
-RPROVIDES_eglibc-pcprofile = "glibc-pcprofile"
-RPROVIDES_eglibc-dbg = "glibc-dbg"
-libc_baselibs = "${base_libdir}/libcrypt*.so.* ${base_libdir}/libcrypt-*.so ${base_libdir}/libc*.so.* ${base_libdir}/libc*.so ${base_libdir}/libm*.so.* ${base_libdir}/libm-*.so ${base_libdir}/ld*.so.* ${base_libdir}/ld-*.so ${base_libdir}/libpthread*.so.* ${base_libdir}/libpthread-*.so ${base_libdir}/libresolv*.so.* ${base_libdir}/libresolv-*.so ${base_libdir}/librt*.so.* ${base_libdir}/librt-*.so ${base_libdir}/libutil*.so.* ${base_libdir}/libutil-*.so ${base_libdir}/libnsl*.so.* ${base_libdir}/libnsl-*.so ${base_libdir}/libnss_files*.so.* ${base_libdir}/libnss_files-*.so ${base_libdir}/libnss_compat*.so.* ${base_libdir}/libnss_compat-*.so ${base_libdir}/libnss_dns*.so.* ${base_libdir}/libnss_dns-*.so ${base_libdir}/libdl*.so.* ${base_libdir}/libdl-*.so ${base_libdir}/libanl*.so.* ${base_libdir}/libanl-*.so ${base_libdir}/libBrokenLocale*.so.* ${base_libdir}/libBrokenLocale-*.so"
+RPROVIDES_${PN}-pcprofile = "glibc-pcprofile"
+RPROVIDES_${PN}-dbg = "glibc-dbg"
+libc_baselibs = "${base_libdir}/libcrypt*.so.* ${base_libdir}/libcrypt-*.so ${base_libdir}/libc.so.* ${base_libdir}/libc-*.so ${base_libdir}/libm*.so.* ${base_libdir}/libm-*.so ${base_libdir}/ld*.so.* ${base_libdir}/ld-*.so ${base_libdir}/libpthread*.so.* ${base_libdir}/libpthread-*.so ${base_libdir}/libresolv*.so.* ${base_libdir}/libresolv-*.so ${base_libdir}/librt*.so.* ${base_libdir}/librt-*.so ${base_libdir}/libutil*.so.* ${base_libdir}/libutil-*.so ${base_libdir}/libnsl*.so.* ${base_libdir}/libnsl-*.so ${base_libdir}/libnss_files*.so.* ${base_libdir}/libnss_files-*.so ${base_libdir}/libnss_compat*.so.* ${base_libdir}/libnss_compat-*.so ${base_libdir}/libnss_dns*.so.* ${base_libdir}/libnss_dns-*.so ${base_libdir}/libdl*.so.* ${base_libdir}/libdl-*.so ${base_libdir}/libanl*.so.* ${base_libdir}/libanl-*.so ${base_libdir}/libBrokenLocale*.so.* ${base_libdir}/libBrokenLocale-*.so"
 
 FILES_${PN} = "${libc_baselibs} ${libexecdir}/* ${@base_conditional('USE_LDCONFIG', '1', '${base_sbindir}/ldconfig ${sysconfdir}/ld.so.conf', '', d)}"
-FILES_ldd${PKGSUFFIX} = "${bindir}/ldd"
-FILES_libsegfault${PKGSUFFIX} = "${base_libdir}/libSegFault*"
-FILES_libcidn = "${base_libdir}/libcidn*.so"
+FILES_ldd = "${bindir}/ldd"
+FILES_libsegfault = "${base_libdir}/libSegFault*"
+FILES_libcidn = "${base_libdir}/libcidn-*.so ${base_libdir}/libcidn.so.*"
 FILES_libmemusage = "${base_libdir}/libmemusage.so"
-FILES_eglibc-extra-nss = "${base_libdir}/libnss*"
+FILES_eglibc-extra-nss = "${base_libdir}/libnss_*-*.so ${base_libdir}/libnss_*.so.*"
 FILES_sln = "/sbin/sln"
-FILES_eglibc-pic = "${libdir}/*_pic.a ${libdir}/*_pic.map ${libdir}/libc_pic/"
-FILES_eglibc-dev_append += "${bindir}/rpcgen ${libdir}/*.a \
-	${base_libdir}/*.a ${base_libdir}/*.o ${datadir}/aclocal"
-FILES_nscd${PKGSUFFIX} = "${sbindir}/nscd*"
-FILES_eglibc-utils = "${bindir}/* ${sbindir}/*"
-FILES_eglibc-gconv = "${libdir}/gconv/*"
-FILES_${PN}-dbg += "${libexecdir}/*/.debug ${libdir}/gconv/.debug"
-FILES_catchsegv${PKGSUFFIX} = "${bindir}/catchsegv"
-RDEPENDS_catchsegv${PKGSUFFIX} = "libsegfault"
-FILES_eglibc-pcprofile = "${base_libdir}/libpcprofile.so"
-FILES_eglibc-thread-db${PKGSUFFIX} = "${base_libdir}/libthread_db*"
-FILES_localedef${PKGSUFFIX} = "${bindir}/localedef"
-RPROVIDES_eglibc-dev += "libc-dev"
+FILES_${PN}-pic = "${libdir}/*_pic.a ${libdir}/*_pic.map ${libdir}/libc_pic/*.o"
+FILES_libsotruss = "${libdir}/audit/sotruss-lib.so"
+FILES_SOLIBSDEV = "${libdir}/lib*${SOLIBSDEV}"
+FILES_${PN}-dev += "${bindir}/rpcgen ${libdir}/*_nonshared.a ${base_libdir}/*_nonshared.a ${base_libdir}/*.o ${datadir}/aclocal"
+FILES_${PN}-staticdev += "${libdir}/*.a ${base_libdir}/*.a"
+FILES_nscd = "${sbindir}/nscd*"
+FILES_${PN}-mtrace = "${bindir}/mtrace"
+FILES_${PN}-utils = "${bindir}/* ${sbindir}/*"
+FILES_${PN}-dbg += "${libexecdir}/*/.debug ${libdir}/audit/.debug"
+FILES_catchsegv = "${bindir}/catchsegv"
+RDEPENDS_catchsegv = "libsegfault"
+RDEPENDS_${PN}-utils += "bash"
+RDEPENDS_${PN}-mtrace += "perl"
+FILES_${PN}-pcprofile = "${base_libdir}/libpcprofile.so"
+FILES_eglibc-thread-db = "${base_libdir}/libthread_db.so.* ${base_libdir}/libthread_db-*.so"
+RPROVIDES_${PN}-dev += "libc-dev"
+RPROVIDES_${PN}-staticdev += "libc-staticdev"
 
 SUMMARY_sln = "The static ln."
 DESCRIPTION_sln = "Similar to the 'ln' utility, but statically linked.  sln is useful to make symbolic links to dynamic libraries if the dynamic linking system, for some reason, is not functional."
@@ -85,9 +66,58 @@ SUMMARY_eglibc-extra-nss = "hesiod, NIS and NIS+ nss libraries"
 DESCRIPTION_eglibc-extra-nss = "eglibc: nis, nisplus and hesiod search services."
 SUMMARY_ldd = "print shared library dependencies"
 DESCRIPTION_ldd = "/usr/bin/ldd prints shared library dependencies for each program or shared library specified on the command line."
-DESCRIPTION_localedef = "eglibc: compile locale definition files"
-SUMMARY_eglibc-utils = "Miscellaneous utilities provided by eglibc"
-DESCRIPTION_eglibc-utils = "Miscellaneous utilities including getconf, iconf, locale, gencat, tzselect, zic, rpcinfo, ..."
+SUMMARY_${PN}-utils = "Miscellaneous utilities provided by eglibc"
+DESCRIPTION_${PN}-utils = "Miscellaneous utilities including getconf, iconf, locale, gencat, tzselect, zic, rpcinfo, ..."
+SUMMARY_${PN}-mtrace = "mtrace utility provided by eglibc"
+DESCRIPTION_${PN}-mtrace = "mtrace utility provided by eglibc"
+DESCRIPTION_libsotruss = "Library to support sotruss which traces calls through PLTs"
 
-inherit libc-package
+inherit libc-common multilib_header
 
+do_install_append () {
+	rm -f ${D}${sysconfdir}/localtime
+	rm -rf ${D}${localstatedir}
+
+	oe_multilib_header bits/syscall.h
+
+	if [ -f ${D}${bindir}/mtrace ]; then
+		sed -i -e '1s,#!.*perl,#! ${USRBINPATH}/env perl,' -e '2s,exec.*perl,exec ${USRBINPATH}/env perl,' ${D}${bindir}/mtrace
+	fi
+	rm -rf ${D}${includedir}/rpcsvc/rquota*
+}
+
+do_install_locale () {
+	dest=${D}/${includedir}/eglibc-locale-internal-${MULTIMACH_TARGET_SYS}
+	install -d ${dest}${base_libdir} ${dest}${bindir} ${dest}${libdir} ${dest}${datadir}
+	if [ "${base_libdir}" != "${libdir}" ]; then
+		cp -fpPR ${D}${base_libdir}/* ${dest}${base_libdir}
+	fi
+	if [ -e ${D}${bindir}/localedef ]; then
+		mv -f ${D}${bindir}/localedef ${dest}${bindir}
+	fi
+	if [ -e ${D}${libdir}/gconv ]; then
+		mv -f ${D}${libdir}/gconv ${dest}${libdir}
+	fi
+	if [ -e ${D}${exec_prefix}/lib ]; then
+		cp -fpPR ${D}${exec_prefix}/lib ${dest}${exec_prefix}
+	fi
+	if [ -e ${D}${datadir}/i18n ]; then
+		mv ${D}${datadir}/i18n ${dest}${datadir}
+	fi
+	cp -fpPR ${D}${datadir}/* ${dest}${datadir}
+	rm -rf ${D}${datadir}/locale/
+	cp -fpPR ${WORKDIR}/SUPPORTED ${dest}
+}
+
+addtask do_install_locale after do_install before do_populate_sysroot do_package
+
+PACKAGE_PREPROCESS_FUNCS += "eglibc_package_preprocess"
+
+eglibc_package_preprocess () {
+	rm -rf ${PKGD}/${includedir}/eglibc-locale-internal-${MULTIMACH_TARGET_SYS}
+	rm -rf ${PKGD}/${localedir}
+	if [ "${libdir}" != "${exec_prefix}/lib" ]; then
+		# This dir only exists to hold locales
+		rm -rf ${PKGD}${exec_prefix}/lib
+	fi
+}

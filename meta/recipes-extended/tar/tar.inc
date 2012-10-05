@@ -12,21 +12,20 @@ EXTRAINSTALL = "do_install_extra"
 
 do_install () {
     autotools_do_install
-    install -d ${D}${base_bindir}
     ${EXTRAINSTALL}
 }
 
 do_install_extra () {
-    mv ${D}${bindir}/tar ${D}${base_bindir}/tar.${PN}
-    mv ${D}${libexecdir}/rmt ${D}${libexecdir}/rmt.${PN}
+    install -d ${D}${base_bindir}
+    mv ${D}${bindir}/tar ${D}${base_bindir}/tar
+    rmdir ${D}${bindir}/
 }
 
-pkg_postinst_${PN} () {
-    update-alternatives --install ${base_bindir}/tar tar tar.${PN} 100
-    update-alternatives --install ${libexecdir}/rmt rmt rmt.${PN} 100
-}
+inherit update-alternatives
 
-pkg_prerm_${PN} () {
-    update-alternatives --remove tar tar.${PN}
-    update-alternatives --remove rmt rmt.${PN}
-}
+ALTERNATIVE_PRIORITY = "100"
+
+ALTERNATIVE_${PN} = "tar rmt"
+
+ALTERNATIVE_LINK_NAME[tar] = "${base_bindir}/tar"
+ALTERNATIVE_LINK_NAME[rmt] = "${libexecdir}/rmt"

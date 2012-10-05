@@ -1,9 +1,8 @@
 DESCRIPTION = " A compact getty program for virtual consoles only"
 SECTION = "console/utils"
-PRIORITY = "required"
 HOMEPAGE = "http://sourceforge.net/projects/mingetty/"
 LICENSE = "GPLv2"
-PR = "r0"
+PR = "r2"
 
 LIC_FILES_CHKSUM = "file://COPYING;md5=0c56db0143f4f80c369ee3af7425af6e"
 SRC_URI = "http://cdnetworks-kr-1.dl.sourceforge.net/project/mingetty/mingetty/${PV}/mingetty-${PV}.tar.gz"
@@ -14,7 +13,13 @@ SRC_URI[sha256sum] = "0f55c90ba4faa913d91ef99cbf5cb2eb4dbe2780314c3bb17953f849c8
 EXTRA_OEMAKE = "CC='${CC}'"
 
 do_install(){
-    mkdir -p ${D}${mandir}/man8
-    mkdir -p ${D}/sbin
+    install -d ${D}${mandir}/man8 ${D}/${base_sbindir}
     oe_runmake install DESTDIR=${D}
 }
+
+inherit update-alternatives
+
+ALTERNATIVE_${PN} = "getty"
+ALTERNATIVE_LINK_NAME[getty] = "${base_sbindir}/getty"
+ALTERNATIVE_TARGET[getty] = "${base_sbindir}/mingetty"
+ALTERNATIVE_PRIORITY = "50"

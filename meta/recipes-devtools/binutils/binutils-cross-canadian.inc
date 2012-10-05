@@ -4,11 +4,9 @@ DESCRIPTION = "A GNU collection of cross-canadian binary utilities for ${TARGET_
 PN = "binutils-cross-canadian-${TRANSLATED_TARGET_ARCH}"
 BPN = "binutils"
 
-DEPENDS = "flex-native bison-native virtual/${HOST_PREFIX}gcc-crosssdk virtual/libc-nativesdk zlib-nativesdk gettext-nativesdk"
-EXTRA_OECONF = "--with-sysroot=${SDKPATH}/sysroots/${TARGET_SYS} \
-                --program-prefix=${TARGET_PREFIX} \
-                --disable-werror"
-
+DEPENDS = "flex-native bison-native virtual/${HOST_PREFIX}gcc-crosssdk virtual/nativesdk-libc nativesdk-zlib nativesdk-gettext"
+EXTRA_OECONF += "--with-sysroot=${SDKPATH}/sysroots/${TUNE_PKGARCH}${TARGET_VENDOR}-${TARGET_OS} \
+                "
 do_install () {
 	autotools_do_install
 
@@ -20,3 +18,5 @@ do_install () {
 	rm -f ${D}${libdir}/libopcodes*
 	rm -f ${D}${includedir}/*.h
 }
+
+BBCLASSEXTEND = ""

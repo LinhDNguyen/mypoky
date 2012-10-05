@@ -10,20 +10,19 @@ SECTION = "base"
 LICENSE = "LGPLv2"
 LIC_FILES_CHKSUM = "file://COPYING;md5=f30a9716ef3762e3467a2f62bf790f0a"
 
-PR = "r16"
+PR = "r20"
 
 SRC_URI = "http://download.berlios.de/tslib/tslib-${PV}.tar.bz2 \
-           file://fix_version.patch;patch=1 \
+           file://fix_version.patch \
+           file://0001-Link-plugins-against-libts.patch \
            file://ts.conf \
-           file://ts.conf-simpad-2.4 \
-           file://ts.conf-collie-2.4 \
-           file://tslib.sh"
+           file://tslib.sh \
+           file://set-open-mode-for-ts_calibrate_c.patch"
 
 SRC_URI[md5sum] = "92b2eb55b1e4ef7e2c0347069389390e"
 SRC_URI[sha256sum] = "9c40d914e4f6fe00bdd77137d671c7ce4f211686228f2eb8b2d3c2360bc249c8"
-SRC_URI_append_mnci += " file://devfs.patch;patch=1"
-SRC_URI_append_mnci += " file://event1.patch;patch=1"
-SRC_URI_append_qemumips += " file://32bitBE-support.patch;patch=1"
+SRC_URI_append_qemumips = " file://32bitBE-support.patch"
+SRC_URI_append_qemuppc = " file://32bitBE-support.patch"
 
 
 inherit autotools pkgconfig
@@ -37,18 +36,6 @@ do_install_prepend() {
 do_install_append() {
 	install -d ${D}${sysconfdir}/profile.d/
 	install -m 0755 ${WORKDIR}/tslib.sh ${D}${sysconfdir}/profile.d/
-	case ${MACHINE} in
-	collie )
-		install -d ${D}${datadir}/tslib
-		install -m 0644 ${WORKDIR}/ts.conf-collie-2.4 ${D}${datadir}/tslib/
-		;;
-	simpad )
-		install -d ${D}${datadir}/tslib
-		install -m 0644 ${WORKDIR}/ts.conf-simpad-2.4 ${D}${datadir}/tslib/
-		;;
-	*)
-		;;
-	esac
 }
 
 SRC_URI_OVERRIDES_PACKAGE_ARCH = "0"
@@ -57,20 +44,6 @@ SRC_URI_OVERRIDES_PACKAGE_ARCH = "0"
 # instead of detect-stylus
 #RDEPENDS_tslib-conf_weird-machine = "detect-stylus"
 RPROVIDES_tslib-conf = "libts-0.0-conf"
-
-# Machines with machine specific patches
-PACKAGE_ARCH_mnci = "${MACHINE_ARCH}"
-# Machines with machine specific config files (tslib.sh)
-PACKAGE_ARCH_tslib-conf_a780 = "${MACHINE_ARCH}"
-PACKAGE_ARCH_tslib-conf_collie = "${MACHINE_ARCH}"
-PACKAGE_ARCH_tslib-conf_e680 = "${MACHINE_ARCH}"
-PACKAGE_ARCH_tslib-conf_jornada56x = "${MACHINE_ARCH}"
-PACKAGE_ARCH_tslib-conf_jornada6xx = "${MACHINE_ARCH}"
-PACKAGE_ARCH_tslib-conf_jornada7xx = "${MACHINE_ARCH}"
-PACKAGE_ARCH_tslib-conf_netbook-pro = "${MACHINE_ARCH}"
-PACKAGE_ARCH_tslib-conf_omap1610h2 = "${MACHINE_ARCH}"
-PACKAGE_ARCH_tslib-conf_omap5912osk = "${MACHINE_ARCH}"
-PACKAGE_ARCH_tslib-conf_simpad = "${MACHINE_ARCH}"
 
 PACKAGES =+ "tslib-conf tslib-tests tslib-calibrate"
 DEBIAN_NOAUTONAME_tslib-conf = "1"
@@ -81,6 +54,7 @@ RDEPENDS_${PN} = "tslib-conf"
 RRECOMMENDS_${PN} = "pointercal"
 
 FILES_${PN}-dbg += "${libdir}/ts/.debug*"
+FILES_${PN}-dev += "${libdir}/ts/*.la"
 FILES_tslib-conf = "${sysconfdir}/ts.conf ${sysconfdir}/profile.d/tslib.sh ${datadir}/tslib"
 FILES_${PN} = "${libdir}/*.so.* ${libdir}/ts/*.so*"
 FILES_tslib-calibrate += "${bindir}/ts_calibrate"

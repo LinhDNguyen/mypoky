@@ -82,7 +82,7 @@ class Hg(FetchMethod):
 
         basecmd = data.expand('${FETCHCMD_hg}', d)
 
-        proto = ud.parm.get('proto', 'http')
+        proto = ud.parm.get('protocol', 'http')
 
         host = ud.host
         if proto == "file":
@@ -94,21 +94,21 @@ class Hg(FetchMethod):
         else:
             hgroot = ud.user + "@" + host + ud.path
 
-        if command is "info":
+        if command == "info":
             return "%s identify -i %s://%s/%s" % (basecmd, proto, hgroot, ud.module)
 
         options = [];
         if ud.revision:
             options.append("-r %s" % ud.revision)
 
-        if command is "fetch":
+        if command == "fetch":
             cmd = "%s clone %s %s://%s/%s %s" % (basecmd, " ".join(options), proto, hgroot, ud.module, ud.module)
-        elif command is "pull":
+        elif command == "pull":
             # do not pass options list; limiting pull to rev causes the local
             # repo not to contain it and immediately following "update" command
             # will crash
             cmd = "%s pull" % (basecmd)
-        elif command is "update":
+        elif command == "update":
             cmd = "%s update -C %s" % (basecmd, " ".join(options))
         else:
             raise FetchError("Invalid hg command %s" % command, ud.url)
@@ -166,7 +166,7 @@ class Hg(FetchMethod):
         output = runfetchcmd(self._buildhgcommand(ud, d, "info"), d)
         return output.strip()
 
-    def _build_revision(self, url, ud, d):
+    def _build_revision(self, url, ud, d, name):
         return ud.revision
 
     def _revision_key(self, url, ud, d, name):

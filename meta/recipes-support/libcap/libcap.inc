@@ -2,12 +2,17 @@ DESCRIPTION = "support for getting/setting POSIX.1e capabilities"
 HOMEPAGE = "http://sites.google.com/site/fullycapable/"
 
 # no specific GPL version required
-LICENSE = "BSD | GPL"
-LIC_FILES_CHKSUM = "file://License;md5=731de803c1ccbcb05a9b3523279c8d7f"
+LICENSE = "BSD | GPLv2"
+LIC_FILES_CHKSUM = "file://License;md5=3f84fd6f29d453a56514cb7e4ead25f1"
 
-DEPENDS = "libpam attr perl-native"
+DEPENDS = "attr perl-native-runtime"
+DEPENDS += "${@base_contains('DISTRO_FEATURES', 'pam', 'libpam', '', d)}"
+# attr and pam are disabled by EXTRA_OEMAKE_virtclass-native
+DEPENDS_virtclass-native = "perl-native-runtime"
 
-SRC_URI = "${KERNELORG_MIRROR}/pub/linux/libs/security/linux-privs/libcap2/${BPN}-${PV}.tar.bz2"
+SRC_URI = "${DEBIAN_MIRROR}/main/libc/libcap2/${BPN}2_${PV}.orig.tar.gz"
+
+PR = "r1"
 
 inherit lib_package
 
@@ -18,17 +23,42 @@ do_configure() {
 	sed -e 's,BUILD_CFLAGS ?=,BUILD_CFLAGS := $(BUILD_CFLAGS),' -i Make.Rules
 }
 
-EXTRA_OEMAKE = "LIBATTR=yes PAM_CAP=yes INDENT= lib=lib"
-EXTRA_OEMAKE_virtclass-native = "LIBATTR=no PAM_CAP=no INDENT= lib=lib"
+BUILD_LDFLAGS_virtclass_native += "-Wl,rpath=${base_libdir}"
+
+EXTRA_OEMAKE = " \
+  LIBATTR=yes \
+  PAM_CAP=${@base_contains('DISTRO_FEATURES', 'pam', 'yes', 'no', d)} \
+  INDENT= SYSTEM_HEADERS=${STAGING_INCDIR} RAISE_SETFCAP=no \
+  lib=${@os.path.basename('${libdir}')} \
+"
+EXTRA_OEMAKE_virtclass-native = " \
+  LIBATTR=no \
+  PAM_CAP=no \
+  INDENT= \
+  lib=${@os.path.basename('${libdir}')} \
+"
 
 do_compile() {
 	oe_runmake
 }
 
 do_install() {
-	oe_runmake install DESTDIR="${D}"
+	oe_runmake install DESTDIR="${D}" prefix="${prefix}" SBINDIR="${D}${sbindir}"
 }
 
+do_install_append() {
+	# Move the library to base_libdir
+	install -d ${D}${base_libdir}
+	if [ ! ${D}${libdir} -ef ${D}${base_libdir} ]; then
+		mv ${D}${libdir}/* ${D}${base_libdir}
+		rmdir ${D}${libdir}
+	fi
+}
+
+FILES_${PN}-dev += "${base_libdir}/*.so"
+
 # pam files
-FILES_${PN} += "${libdir}/security/*.so"
-FILES_${PN}-dbg += "${libdir}/security/.debug/*.so"
+FILES_${PN} += "${base_libdir}/security/*.so"
+FILES_${PN}-dbg += "${base_libdir}/security/.debug/*.so"
+
+BBCLASSEXTEND = "native"

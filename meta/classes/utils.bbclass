@@ -58,32 +58,6 @@ def is_machine_specific(d):
             if any(fetcher.localpath(url).startswith(mp + "/") for mp in machinepaths):
                 return True
 
-def oe_popen_env(d):
-    env = d.getVar("__oe_popen_env", False)
-    if env is None:
-        env = {}
-        for v in d.keys():
-            if d.getVarFlag(v, "export"):
-                env[v] = d.getVar(v, True) or ""
-        d.setVar("__oe_popen_env", env)
-    return env
-
-def oe_run(d, cmd, **kwargs):
-    import oe.process
-    kwargs["env"] = oe_popen_env(d)
-    return oe.process.run(cmd, **kwargs)
-
-def oe_popen(d, cmd, **kwargs):
-    import oe.process
-    kwargs["env"] = oe_popen_env(d)
-    return oe.process.Popen(cmd, **kwargs)
-
-def oe_system(d, cmd, **kwargs):
-    """ Popen based version of os.system. """
-    if not "shell" in kwargs:
-        kwargs["shell"] = True
-    return oe_popen(d, cmd, **kwargs).wait()
-
 oe_soinstall() {
 	# Purpose: Install shared library file and
 	#          create the necessary links
@@ -91,7 +65,7 @@ oe_soinstall() {
 	#
 	# oe_
 	#
-	#oenote installing shared library $1 to $2
+	#bbnote installing shared library $1 to $2
 	#
 	libname=`basename $1`
 	install -m 755 $1 $2/$libname
@@ -129,7 +103,7 @@ oe_libinstall() {
 			require_shared=1
 			;;
 		-*)
-			oefatal "oe_libinstall: unknown option: $1"
+			bbfatal "oe_libinstall: unknown option: $1"
 			;;
 		*)
 			break;
@@ -142,7 +116,7 @@ oe_libinstall() {
 	shift
 	destpath="$1"
 	if [ -z "$destpath" ]; then
-		oefatal "oe_libinstall: no destination path specified"
+		bbfatal "oe_libinstall: no destination path specified"
 	fi
 	if echo "$destpath/" | egrep '^${STAGING_LIBDIR}/' >/dev/null
 	then
@@ -165,7 +139,7 @@ oe_libinstall() {
 	# Sanity check that the libname.lai is unique
 	number_of_files=`(cd $dir; find . -name "$dotlai") | wc -l`
 	if [ $number_of_files -gt 1 ]; then
-		oefatal "oe_libinstall: $dotlai is not unique in $dir"
+		bbfatal "oe_libinstall: $dotlai is not unique in $dir"
 	fi
 
 
@@ -209,7 +183,7 @@ oe_libinstall() {
 		for f in $files; do
 			if [ ! -e "$f" ]; then
 				if [ -n "$libtool" ]; then
-					oefatal "oe_libinstall: $dir/$f not found."
+					bbfatal "oe_libinstall: $dir/$f not found."
 				fi
 			elif [ -L "$f" ]; then
 				__runcmd cp -P "$f" $destpath/
@@ -223,7 +197,7 @@ oe_libinstall() {
 
 	if [ -z "$libfile" ]; then
 		if  [ -n "$require_shared" ]; then
-			oefatal "oe_libinstall: unable to locate shared library"
+			bbfatal "oe_libinstall: unable to locate shared library"
 		fi
 	elif [ -z "$libtool" ]; then
 		# special case hack for non-libtool .so.#.#.# links
@@ -256,84 +230,139 @@ oe_machinstall() {
 
 	for o in `echo ${OVERRIDES} | tr ':' ' '`; do
 		if [ -e $dirname/$o/$filename ]; then
-			oenote $dirname/$o/$filename present, installing to $4
+			bbnote $dirname/$o/$filename present, installing to $4
 			install $1 $2 $dirname/$o/$filename $4
 			return
 		fi
 	done
-#	oenote overrides specific file NOT present, trying default=$3...
+#	bbnote overrides specific file NOT present, trying default=$3...
 	if [ -e $3 ]; then
-		oenote $3 present, installing to $4
+		bbnote $3 present, installing to $4
 		install $1 $2 $3 $4
 	else
-		oenote $3 NOT present, touching empty $4
+		bbnote $3 NOT present, touching empty $4
 		touch $4
 	fi
 }
 
 create_cmdline_wrapper () {
-   # Create a wrapper script
-   #
-   # These are useful to work around relocation issues, by setting environment
-   # variables which point to paths in the filesystem.
-   #
-   # Usage: create_wrapper FILENAME [[VAR=VALUE]..]
+	# Create a wrapper script
+	#
+	# These are useful to work around relocation issues, by setting environment
+	# variables which point to paths in the filesystem.
+	#
+	# Usage: create_wrapper FILENAME [[VAR=VALUE]..]
 
-   cmd=$1
-   shift
+	cmd=$1
+	shift
 
-   # run echo via env to test syntactic validity of the variable arguments
-   echo "Generating wrapper script for $cmd"
+	echo "Generating wrapper script for $cmd"
 
-   mv $cmd $cmd.real
-   cmdname=`basename $cmd`.real
-   cat <<END >$cmd
+	mv $cmd $cmd.real
+	cmdname=`basename $cmd`.real
+	cat <<END >$cmd
 #!/bin/sh
-exec \`dirname \$0\`/$cmdname "\$@"
+realpath=\`readlink -fn \$0\`
+exec \`dirname \$realpath\`/$cmdname $@ "\$@"
 END
-   chmod +x $cmd
+	chmod +x $cmd
 }
 
 create_wrapper () {
-   # Create a wrapper script
-   #
-   # These are useful to work around relocation issues, by setting environment
-   # variables which point to paths in the filesystem.
-   #
-   # Usage: create_wrapper FILENAME [[VAR=VALUE]..]
+	# Create a wrapper script
+	#
+	# These are useful to work around relocation issues, by setting environment
+	# variables which point to paths in the filesystem.
+	#
+	# Usage: create_wrapper FILENAME [[VAR=VALUE]..]
 
-   cmd=$1
-   shift
+	cmd=$1
+	shift
 
-   # run echo via env to test syntactic validity of the variable arguments
-   env $@ echo "Generating wrapper script for $cmd"
+	echo "Generating wrapper script for $cmd"
 
-   mv $cmd $cmd.real
-   cmdname=`basename $cmd`.real
-   cat <<END >$cmd
+	mv $cmd $cmd.real
+	cmdname=`basename $cmd`.real
+	cat <<END >$cmd
 #!/bin/sh
-exec env $@ \`dirname \$0\`/$cmdname "\$@"
+realpath=\`readlink -fn \$0\`
+exec env $@ \`dirname \$realpath\`/$cmdname "\$@"
 END
-   chmod +x $cmd
+	chmod +x $cmd
 }
 
 def check_app_exists(app, d):
-	from bb import which, data
+    from bb import which, data
 
-	app = data.expand(app, d)
-	path = data.getVar('PATH', d, 1)
-	return bool(which(path, app))
+    app = data.expand(app, d)
+    path = data.getVar('PATH', d, 1)
+    return bool(which(path, app))
 
 def explode_deps(s):
-	return bb.utils.explode_deps(s)
+    return bb.utils.explode_deps(s)
 
 def base_set_filespath(path, d):
-	filespath = []
-	extrapaths = (bb.data.getVar("FILESEXTRAPATHS", d, True) or "").split()
-	path = extrapaths + path
-	# The ":" ensures we have an 'empty' override
-	overrides = (bb.data.getVar("OVERRIDES", d, 1) or "") + ":"
-	for p in path:
-		for o in overrides.split(":"):
-			filespath.append(os.path.join(p, o))
-	return ":".join(filespath)
+    filespath = []
+    extrapaths = (d.getVar("FILESEXTRAPATHS", True) or "")
+    # Don't prepend empty strings to the path list
+    if extrapaths != "":
+        path = extrapaths.split(":") + path
+    # The ":" ensures we have an 'empty' override
+    overrides = (d.getVar("OVERRIDES", True) or "") + ":"
+    for p in path:
+        if p != "": 
+            for o in overrides.split(":"):
+                filespath.append(os.path.join(p, o))
+    return ":".join(filespath)
+
+def extend_variants(d, var, extend, delim=':'):
+    """Return a string of all bb class extend variants for the given extend"""
+    variants = []
+    whole = d.getVar(var, True) or ""
+    for ext in whole.split():
+        eext = ext.split(delim)
+        if len(eext) > 1 and eext[0] == extend:
+            variants.append(eext[1])
+    return " ".join(variants)
+
+def multilib_pkg_extend(d, pkg):
+    variants = (d.getVar("MULTILIB_VARIANTS", True) or "").split()
+    if not variants:
+        return pkg
+    pkgs = pkg
+    for v in variants:
+        pkgs = pkgs + " " + v + "-" + pkg
+    return pkgs
+
+def all_multilib_tune_values(d, var, unique = True, need_split = True, delim = ' '):
+    """Return a string of all ${var} in all multilib tune configuration"""
+    values = []
+    value = d.getVar(var, True) or ""
+    if value != "":
+        if need_split:
+            for item in value.split(delim):
+                values.append(item)
+        else:
+            values.append(value)
+    variants = d.getVar("MULTILIB_VARIANTS", True) or ""
+    for item in variants.split():
+        localdata = bb.data.createCopy(d)
+        overrides = localdata.getVar("OVERRIDES", False) + ":virtclass-multilib-" + item
+        localdata.setVar("OVERRIDES", overrides)
+        bb.data.update_data(localdata)
+        value = localdata.getVar(var, True) or ""
+        if value != "":
+            if need_split:
+                for item in value.split(delim):
+                    values.append(item)
+            else:
+                values.append(value)
+    if unique:
+        #we do this to keep order as much as possible
+        ret = []
+        for value in values:
+            if not value in ret:
+                ret.append(value)
+    else:
+        ret = values
+    return " ".join(ret)

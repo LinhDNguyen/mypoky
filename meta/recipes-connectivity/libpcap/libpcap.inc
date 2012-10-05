@@ -8,11 +8,16 @@ SECTION = "libs/network"
 LICENSE = "BSD"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=1d4b0366557951c84a94fabe3529f867 \
                     file://pcap.h;beginline=1;endline=34;md5=8d6cf7e17d5745010d633e30bc529ea9"
-DEPENDS = "flex-native bison-native"
+DEPENDS = "flex-native bison-native libnl"
+
+PACKAGECONFIG ??= "${@base_contains('DISTRO_FEATURES', 'bluetooth', 'bluetooth', '', d)}"
+PACKAGECONFIG[bluetooth] = "--enable-bluetooth,--disable-bluetooth,bluez4"
+
+INC_PR = "r3"
 
 SRC_URI = "http://www.tcpdump.org/release/libpcap-${PV}.tar.gz"
 
-inherit autotools
+inherit autotools binconfig
 
 EXTRA_OECONF = "--with-pcap=linux"
 
@@ -24,4 +29,5 @@ do_configure_prepend () {
     if [ ! -e acinclude.m4 ]; then
         cat aclocal.m4 > acinclude.m4
     fi
+    sed -i -e's,^V_RPATH_OPT=.*$,V_RPATH_OPT=,' ${S}/pcap-config.in
 }

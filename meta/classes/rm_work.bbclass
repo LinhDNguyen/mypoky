@@ -6,7 +6,7 @@
 # INHERIT += "rm_work"
 #
 
-# Use the completion scheulder by default when rm_work is active
+# Use the completion scheduler by default when rm_work is active
 # to try and reduce disk usage
 BB_SCHEDULER ?= "completion"
 
@@ -40,6 +40,10 @@ do_rm_work () {
         do
             case $i in
             *do_setscene*)
+                break
+                ;;
+            *sigdata*)
+                i=dummy
                 break
                 ;;
             *do_package_write*)

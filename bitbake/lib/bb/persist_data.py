@@ -26,7 +26,8 @@ import logging
 import os.path
 import sys
 import warnings
-import bb.msg, bb.data, bb.utils
+from bb.compat import total_ordering
+from collections import Mapping
 
 try:
     import sqlite3
@@ -39,13 +40,20 @@ if sqlversion[0] < 3 or (sqlversion[0] == 3 and sqlversion[1] < 3):
 
 
 logger = logging.getLogger("BitBake.PersistData")
+if hasattr(sqlite3, 'enable_shared_cache'):
+    try:
+        sqlite3.enable_shared_cache(True)
+    except sqlite3.OperationalError:
+        pass
 
 
+@total_ordering
 class SQLTable(collections.MutableMapping):
     """Object representing a table/domain in the database"""
-    def __init__(self, cursor, table):
-        self.cursor = cursor
+    def __init__(self, cachefile, table):
+        self.cachefile = cachefile
         self.table = table
+        self.cursor = connect(self.cachefile)
 
         self._execute("CREATE TABLE IF NOT EXISTS %s(key TEXT, value TEXT);"
                       % table)
@@ -59,19 +67,36 @@ class SQLTable(collections.MutableMapping):
             except sqlite3.OperationalError as exc:
                 if 'database is locked' in str(exc) and count < 500:
                     count = count + 1
+                    self.cursor.close()
+                    self.cursor = connect(self.cachefile)
                     continue
                 raise
+
+    def __enter__(self):
+        self.cursor.__enter__()
+        return self
+
+    def __exit__(self, *excinfo):
+        self.cursor.__exit__(*excinfo)
 
     def __getitem__(self, key):
         data = self._execute("SELECT * from %s where key=?;" %
                              self.table, [key])
         for row in data:
             return row[1]
+        raise KeyError(key)
 
     def __delitem__(self, key):
+        if key not in self:
+            raise KeyError(key)
         self._execute("DELETE from %s where key=?;" % self.table, [key])
 
     def __setitem__(self, key, value):
+        if not isinstance(key, basestring):
+            raise TypeError('Only string keys are supported')
+        elif not isinstance(value, basestring):
+            raise TypeError('Only string values are supported')
+
         data = self._execute("SELECT * from %s where key=?;" %
                                    self.table, [key])
         exists = len(list(data))
@@ -92,53 +117,40 @@ class SQLTable(collections.MutableMapping):
 
     def __iter__(self):
         data = self._execute("SELECT key FROM %s;" % self.table)
-        for row in data:
-            yield row[0]
+        return (row[0] for row in data)
 
-    def iteritems(self):
-        data = self._execute("SELECT * FROM %s;" % self.table)
-        for row in data:
-            yield row[0], row[1]
+    def __lt__(self, other):
+        if not isinstance(other, Mapping):
+            raise NotImplemented
+
+        return len(self) < len(other)
+
+    def values(self):
+        return list(self.itervalues())
 
     def itervalues(self):
         data = self._execute("SELECT value FROM %s;" % self.table)
-        for row in data:
-            yield row[0]
+        return (row[0] for row in data)
 
+    def items(self):
+        return list(self.iteritems())
 
-class SQLData(object):
-    """Object representing the persistent data"""
-    def __init__(self, filename):
-        bb.utils.mkdirhier(os.path.dirname(filename))
+    def iteritems(self):
+        return self._execute("SELECT * FROM %s;" % self.table)
 
-        self.filename = filename
-        self.connection = sqlite3.connect(filename, timeout=5,
-                                          isolation_level=None)
-        self.cursor = self.connection.cursor()
-        self._tables = {}
+    def clear(self):
+        self._execute("DELETE FROM %s;" % self.table)
 
-    def __getitem__(self, table):
-        if not isinstance(table, basestring):
-            raise TypeError("table argument must be a string, not '%s'" %
-                            type(table))
-
-        if table in self._tables:
-            return self._tables[table]
-        else:
-            tableobj = self._tables[table] = SQLTable(self.cursor, table)
-            return tableobj
-
-    def __delitem__(self, table):
-        if table in self._tables:
-            del self._tables[table]
-        self.cursor.execute("DROP TABLE IF EXISTS %s;" % table)
+    def has_key(self, key):
+        return key in self
 
 
 class PersistData(object):
     """Deprecated representation of the bitbake persistent data store"""
     def __init__(self, d):
-        warnings.warn("Use of PersistData will be deprecated in the future",
-                      category=PendingDeprecationWarning,
+        warnings.warn("Use of PersistData is deprecated.  Please use "
+                      "persist(domain, d) instead.",
+                      category=DeprecationWarning,
                       stacklevel=2)
 
         self.data = persist(d)
@@ -181,14 +193,18 @@ class PersistData(object):
         """
         del self.data[domain][key]
 
+def connect(database):
+    return sqlite3.connect(database, timeout=5, isolation_level=None)
 
-def persist(d):
-    """Convenience factory for construction of SQLData based upon metadata"""
-    cachedir = (bb.data.getVar("PERSISTENT_DIR", d, True) or
-                bb.data.getVar("CACHE", d, True))
+def persist(domain, d):
+    """Convenience factory for SQLTable objects based upon metadata"""
+    import bb.utils
+    cachedir = (d.getVar("PERSISTENT_DIR", True) or
+                d.getVar("CACHE", True))
     if not cachedir:
         logger.critical("Please set the 'PERSISTENT_DIR' or 'CACHE' variable")
         sys.exit(1)
 
+    bb.utils.mkdirhier(cachedir)
     cachefile = os.path.join(cachedir, "bb_persist_data.sqlite3")
-    return SQLData(cachefile)
+    return SQLTable(cachefile, domain)

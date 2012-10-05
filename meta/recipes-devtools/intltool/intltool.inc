@@ -1,17 +1,27 @@
 DESCRIPTION = "Utility scripts for internationalizing XML"
-PRIORITY = "optional"
 SECTION = "devel"
-LICENSE = "GPL"
+LICENSE = "GPLv2"
 
-URLV="${@'.'.join(bb.data.getVar('PV',d,1).split('.')[0:2])}"
-SRC_URI = "${GNOME_MIRROR}/intltool/${URLV}/intltool-${PV}.tar.bz2"
+URLV="${@'.'.join(d.getVar('PV',1).split('.')[0:2])}"
+SRC_URI = "http://launchpad.net/${BPN}/trunk/${PV}/+download/${BP}.tar.gz"
 S = "${WORKDIR}/intltool-${PV}"
 
 DEPENDS = "libxml-parser-perl-native"
-#RDEPENDS_${PN} = "libxml-parser-perl"
+RDEPENDS_${PN} = "gettext-dev libxml-parser-perl"
+DEPENDS_virtclass-native = "libxml-parser-perl-native"
+# gettext is assumed to exist on the host
+RDEPENDS_${PN}_virtclass-native = "libxml-parser-perl-native"
 RRECOMMENDS_${PN} = "perl-modules"
+RRECOMMENDS_${PN}_virtclass-native = ""
 
-inherit autotools pkgconfig
+FILES_${PN}-dev = ""
+FILES_${PN} += "${datadir}/aclocal"
 
-export PERL_virtclass-native = "/usr/bin/env perl"
+INSANE_SKIP_${PN} += "dev-deps"
+
+inherit autotools pkgconfig perlnative
+
+export PERL = "${bindir}/env perl"
+PERL_virtclass-native = "/usr/bin/env nativeperl"
+
 BBCLASSEXTEND = "native"

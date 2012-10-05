@@ -1,9 +1,10 @@
+import errno
+import glob
 import shutil
 import subprocess
 
 def join(*paths):
     """Like os.path.join but doesn't treat absolute RHS specially"""
-    import os.path
     return os.path.normpath("/".join(paths))
 
 def relative(src, dest):
@@ -18,7 +19,6 @@ def relative(src, dest):
     >>> relative("/tmp", "/tmp/foo/bar")
     foo/bar
     """
-    import os.path
 
     if hasattr(os.path, "relpath"):
         return os.path.relpath(dest, src)
@@ -38,9 +38,36 @@ def relative(src, dest):
 
         return os.path.sep.join(relpath)
 
+def make_relative_symlink(path):
+    """ Convert an absolute symlink to a relative one """
+    if not os.path.islink(path):
+        return
+    link = os.readlink(path)
+    if not os.path.isabs(link):
+        return
+
+    # find the common ancestor directory
+    ancestor = path
+    depth = 0
+    while ancestor and not link.startswith(ancestor):
+        ancestor = ancestor.rpartition('/')[0]
+        depth += 1
+
+    if not ancestor:
+        print "make_relative_symlink() Error: unable to find the common ancestor of %s and its target" % path
+        return
+
+    base = link.partition(ancestor)[2].strip('/')
+    while depth > 1:
+        base = "../" + base
+        depth -= 1
+
+    os.remove(path)
+    os.symlink(base, path)
+
 def format_display(path, metadata):
     """ Prepare a path for display to the user. """
-    rel = relative(metadata.getVar("TOPDIR", 1), path)
+    rel = relative(metadata.getVar("TOPDIR", True), path)
     if len(rel) > len(path):
         return path
     else:
@@ -57,21 +84,19 @@ def copytree(src, dst):
     check_output(cmd, shell=True, stderr=subprocess.STDOUT)
 
 
-def remove(path):
+def remove(path, recurse=True):
     """Equivalent to rm -f or rm -rf"""
-    import os, errno, shutil, glob
     for name in glob.glob(path):
         try:
             os.unlink(name)
         except OSError, exc:
-            if exc.errno == errno.EISDIR:
-                shutil.rmtree(path)
+            if recurse and exc.errno == errno.EISDIR:
+                shutil.rmtree(name)
             elif exc.errno != errno.ENOENT:
                 raise
 
 def symlink(source, destination, force=False):
     """Create a symbolic link"""
-    import os, errno
     try:
         if force:
             remove(destination)
@@ -121,3 +146,10 @@ def check_output(*popenargs, **kwargs):
         raise CalledProcessError(retcode, cmd, output=output)
     return output
 
+def find(dir, **walkoptions):
+    """ Given a directory, recurses into that directory,
+    returning all files as absolute paths. """
+
+    for root, dirs, files in os.walk(dir, **walkoptions):
+        for file in files:
+            yield os.path.join(root, file)

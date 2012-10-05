@@ -60,21 +60,21 @@ class Bzr(FetchMethod):
 
         basecmd = data.expand('${FETCHCMD_bzr}', d)
 
-        proto =  ud.parm.get('proto', 'http')
+        proto =  ud.parm.get('protocol', 'http')
 
         bzrroot = ud.host + ud.path
 
         options = []
 
-        if command is "revno":
+        if command == "revno":
             bzrcmd = "%s revno %s %s://%s" % (basecmd, " ".join(options), proto, bzrroot)
         else:
             if ud.revision:
                 options.append("-r %s" % ud.revision)
 
-            if command is "fetch":
-                bzrcmd = "%s co %s %s://%s" % (basecmd, " ".join(options), proto, bzrroot)
-            elif command is "update":
+            if command == "fetch":
+                bzrcmd = "%s branch %s %s://%s" % (basecmd, " ".join(options), proto, bzrroot)
+            elif command == "update":
                 bzrcmd = "%s pull %s --overwrite" % (basecmd, " ".join(options))
             else:
                 raise FetchError("Invalid bzr command %s" % command, ud.url)

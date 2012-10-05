@@ -1,4 +1,4 @@
-require xf86-input-common.inc
+require xorg-driver-input.inc
 
 SUMMARY = "X.Org X server -- synaptics touchpad input driver"
 
@@ -8,7 +8,9 @@ operating in a compatibility mode emulating a standard mouse) can be \
 handled by the normal evdev or mouse drivers, this driver allows more \
 advanced features of the touchpad to become available."
 
+SRCREV = "934bc0012f948c52aadc8eda912f7728fb7394a2"
 PV = "0.15.2+git${SRCPV}"
+PR = "${INC_PR}.0"
 
 SRC_URI = "git://anongit.freedesktop.org/git/xorg/driver/xf86-input-synaptics;protocol=git"
 S = "${WORKDIR}/git"

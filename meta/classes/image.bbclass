@@ -3,19 +3,72 @@ inherit rootfs_${IMAGE_PKGTYPE}
 IMAGETEST ?= "dummy"
 inherit imagetest-${IMAGETEST}
 
+inherit populate_sdk_base
+
+TOOLCHAIN_TARGET_TASK += "${PACKAGE_INSTALL}"
+TOOLCHAIN_TARGET_TASK_ATTEMPTONLY += "${PACKAGE_INSTALL_ATTEMPTONLY}"
+POPULATE_SDK_POST_TARGET_COMMAND += "rootfs_install_complementary populate_sdk; "
+
+inherit gzipnative
+
 LICENSE = "MIT"
 PACKAGES = ""
-RDEPENDS += "${IMAGE_INSTALL}"
+RDEPENDS += "${IMAGE_INSTALL} ${LINGUAS_INSTALL} ${NORMAL_FEATURE_INSTALL} ${ROOTFS_BOOTSTRAP_INSTALL}"
+RRECOMMENDS += "${NORMAL_FEATURE_INSTALL_OPTIONAL}"
 
 INHIBIT_DEFAULT_DEPS = "1"
 
-# "export IMAGE_BASENAME" not supported at this time
-IMAGE_BASENAME[export] = "1"
-export PACKAGE_INSTALL ?= "${IMAGE_INSTALL}"
-PACKAGE_INSTALL_ATTEMPTONLY ?= ""
+# IMAGE_FEATURES may contain any available package group
+IMAGE_FEATURES ?= ""
+IMAGE_FEATURES[type] = "list"
 
-# We need to recursively follow RDEPENDS and RRECOMMENDS for images
-do_rootfs[recrdeptask] += "do_deploy do_populate_sysroot"
+# rootfs bootstrap install
+ROOTFS_BOOTSTRAP_INSTALL = "${@base_contains("IMAGE_FEATURES", "package-management", "", "${ROOTFS_PKGMANAGE_BOOTSTRAP}",d)}"
+
+# packages to install from features
+FEATURE_INSTALL = "${@' '.join(oe.packagegroup.required_packages(oe.data.typed_value('IMAGE_FEATURES', d), d))}"
+FEATURE_INSTALL_OPTIONAL = "${@' '.join(oe.packagegroup.optional_packages(oe.data.typed_value('IMAGE_FEATURES', d), d))}"
+
+# packages to install from features, excluding dev/dbg/doc
+NORMAL_FEATURE_INSTALL = "${@' '.join(oe.packagegroup.required_packages(normal_groups(d), d))}"
+NORMAL_FEATURE_INSTALL_OPTIONAL = "${@' '.join(oe.packagegroup.optional_packages(normal_groups(d), d))}"
+
+def normal_groups(d):
+    """Return all the IMAGE_FEATURES, with the exception of our special package groups"""
+    extras = set(['dev-pkgs', 'staticdev-pkgs', 'doc-pkgs', 'dbg-pkgs'])
+    features = set(oe.data.typed_value('IMAGE_FEATURES', d))
+    return features.difference(extras)
+
+# Define some very basic feature package groups
+SPLASH ?= "psplash"
+PACKAGE_GROUP_splash = "${SPLASH}"
+
+# Wildcards specifying complementary packages to install for every package that has been explicitly
+# installed into the rootfs
+def complementary_globs(featurevar, d):
+    globs = []
+    features = set((d.getVar(featurevar, True) or '').split())
+    for feature in features:
+        if feature == 'dev-pkgs':
+            globs.append('*-dev')
+        elif feature == 'staticdev-pkgs':
+            globs.append('*-staticdev')
+        elif feature == 'doc-pkgs':
+            globs.append('*-doc')
+        elif feature == 'dbg-pkgs':
+            globs.append('*-dbg')
+    return ' '.join(globs)
+
+IMAGE_INSTALL_COMPLEMENTARY = '${@complementary_globs("IMAGE_FEATURES", d)}'
+SDKIMAGE_FEATURES ??= "dev-pkgs dbg-pkgs"
+SDKIMAGE_INSTALL_COMPLEMENTARY = '${@complementary_globs("SDKIMAGE_FEATURES", d)}'
+
+# "export IMAGE_BASENAME" not supported at this time
+IMAGE_INSTALL ?= ""
+IMAGE_INSTALL[type] = "list"
+IMAGE_BASENAME[export] = "1"
+export PACKAGE_INSTALL ?= "${IMAGE_INSTALL} ${ROOTFS_BOOTSTRAP_INSTALL} ${FEATURE_INSTALL}"
+PACKAGE_INSTALL_ATTEMPTONLY ?= "${FEATURE_INSTALL_OPTIONAL}"
 
 # Images are generally built explicitly, do not need to be part of world.
 EXCLUDE_FROM_WORLD = "1"
@@ -26,23 +79,56 @@ PID = "${@os.getpid()}"
 
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
-do_rootfs[depends] += "makedevs-native:do_populate_sysroot virtual/fakeroot-native:do_populate_sysroot ldconfig-native:do_populate_sysroot"
+LDCONFIGDEPEND ?= "ldconfig-native:do_populate_sysroot"
+LDCONFIGDEPEND_libc-uclibc = ""
+
+do_rootfs[depends] += "makedevs-native:do_populate_sysroot virtual/fakeroot-native:do_populate_sysroot ${LDCONFIGDEPEND}"
+do_rootfs[depends] += "virtual/update-alternatives-native:do_populate_sysroot update-rc.d-native:do_populate_sysroot"
+
+IMAGE_TYPE_live = '${@base_contains("IMAGE_FSTYPES", "live", "live", "empty", d)}'
+inherit image-${IMAGE_TYPE_live}
+IMAGE_TYPE_vmdk = '${@base_contains("IMAGE_FSTYPES", "vmdk", "vmdk", "empty", d)}'
+inherit image-${IMAGE_TYPE_vmdk}
 
 python () {
-    deps = bb.data.getVarFlag('do_rootfs', 'depends', d) or ""
-    for type in (bb.data.getVar('IMAGE_FSTYPES', d, True) or "").split():
-        for dep in ((bb.data.getVar('IMAGE_DEPENDS_%s' % type, d) or "").split() or []):
-            deps += " %s:do_populate_sysroot" % dep
-    for dep in (bb.data.getVar('EXTRA_IMAGEDEPENDS', d, True) or "").split():
+    deps = " " + imagetypes_getdepends(d)
+    d.appendVarFlag('do_rootfs', 'depends', deps)
+
+    deps = ""
+    for dep in (d.getVar('EXTRA_IMAGEDEPENDS', True) or "").split():
         deps += " %s:do_populate_sysroot" % dep
-    bb.data.setVarFlag('do_rootfs', 'depends', deps, d)
+    d.appendVarFlag('do_build', 'depends', deps)
+
+    #process IMAGE_FEATURES, we must do this before runtime_mapping_rename
+    #Check for replaces image features
+    features = set(oe.data.typed_value('IMAGE_FEATURES', d))
+    remain_features = features.copy()
+    for feature in features:
+        replaces = set((d.getVar("IMAGE_FEATURES_REPLACES_%s" % feature, True) or "").split())
+        remain_features -= replaces
+
+    #Check for conflict image features
+    for feature in remain_features:
+        conflicts = set((d.getVar("IMAGE_FEATURES_CONFLICTS_%s" % feature, True) or "").split())
+        temp = conflicts & remain_features
+        if temp:
+            bb.fatal("%s contains conflicting IMAGE_FEATURES %s %s" % (d.getVar('PN', True), feature, ' '.join(list(temp))))
+
+    d.setVar('IMAGE_FEATURES', ' '.join(list(remain_features)))
+}
+
+python image_handler () {
+    if not isinstance(e, bb.event.RecipeParsed):
+        return
 
     # If we don't do this we try and run the mapping hooks while parsing which is slow
     # bitbake should really provide something to let us know this...
-    if bb.data.getVar('BB_WORKERCONTEXT', d, True) is not None:
-        runtime_mapping_rename("PACKAGE_INSTALL", d)
-        runtime_mapping_rename("PACKAGE_INSTALL_ATTEMPTONLY", d)
+    if e.data.getVar('BB_WORKERCONTEXT', True) is not None:
+        runtime_mapping_rename("PACKAGE_INSTALL", e.data)
+        runtime_mapping_rename("PACKAGE_INSTALL_ATTEMPTONLY", e.data)
+
 }
+addhandler image_handler
 
 #
 # Get a list of files containing device tables to create.
@@ -53,31 +139,19 @@ python () {
 # is searched for in the BBPATH (same as the old version.)
 #
 def get_devtable_list(d):
-    devtable = bb.data.getVar('IMAGE_DEVICE_TABLE', d, 1)
+    devtable = d.getVar('IMAGE_DEVICE_TABLE', True)
     if devtable != None:
         return devtable
     str = ""
-    devtables = bb.data.getVar('IMAGE_DEVICE_TABLES', d, 1)
+    devtables = d.getVar('IMAGE_DEVICE_TABLES', True)
     if devtables == None:
         devtables = 'files/device_table-minimal.txt'
     for devtable in devtables.split():
-        str += " %s" % bb.which(bb.data.getVar('BBPATH', d, 1), devtable)
+        str += " %s" % bb.which(d.getVar('BBPATH', True), devtable)
     return str
 
-def get_imagecmds(d):
-    cmds = "\n"
-    old_overrides = bb.data.getVar('OVERRIDES', d, 0)
-    for type in bb.data.getVar('IMAGE_FSTYPES', d, True).split():
-        localdata = bb.data.createCopy(d)
-        bb.data.setVar('OVERRIDES', '%s:%s' % (type, old_overrides), localdata)
-        bb.data.update_data(localdata)
-        cmd  = "\t#Code for image type " + type + "\n"
-        cmd += "\t${IMAGE_CMD_" + type + "}\n"
-        cmd += "\tcd ${DEPLOY_DIR_IMAGE}/\n"
-        cmd += "\trm -f ${DEPLOY_DIR_IMAGE}/${IMAGE_LINK_NAME}." + type + "\n"
-        cmd += "\tln -s ${IMAGE_NAME}.rootfs." + type + " ${DEPLOY_DIR_IMAGE}/${IMAGE_LINK_NAME}." + type + "\n\n"
-        cmds += bb.data.expand(cmd, localdata)
-    return cmds
+IMAGE_CLASSES ?= "image_types"
+inherit ${IMAGE_CLASSES}
 
 IMAGE_POSTPROCESS_COMMAND ?= ""
 MACHINE_POSTPROCESS_COMMAND ?= ""
@@ -86,23 +160,44 @@ ROOTFS_POSTPROCESS_COMMAND ?= ""
 # some default locales
 IMAGE_LINGUAS ?= "de-de fr-fr en-gb"
 
-LINGUAS_INSTALL = "${@" ".join(map(lambda s: "locale-base-%s" % s, bb.data.getVar('IMAGE_LINGUAS', d, 1).split()))}"
+LINGUAS_INSTALL ?= "${@" ".join(map(lambda s: "locale-base-%s" % s, d.getVar('IMAGE_LINGUAS', True).split()))}"
+
+PSEUDO_PASSWD = "${IMAGE_ROOTFS}"
 
 do_rootfs[nostamp] = "1"
 do_rootfs[dirs] = "${TOPDIR}"
 do_rootfs[lockfiles] += "${IMAGE_ROOTFS}.lock"
+do_rootfs[cleandirs] += "${S}"
 do_build[nostamp] = "1"
 
 # Must call real_do_rootfs() from inside here, rather than as a separate
 # task, so that we have a single fakeroot context for the whole process.
+do_rootfs[umask] = "022"
+
 fakeroot do_rootfs () {
 	#set -x
-	rm -rf ${IMAGE_ROOTFS}
+	# When use the rpm incremental image generation, don't remove the rootfs
+	if [ "${INC_RPM_IMAGE_GEN}" != "1" -o "${IMAGE_PKGTYPE}" != "rpm" ]; then
+		rm -rf ${IMAGE_ROOTFS}
+	elif [ -d ${T}/saved_rpmlib/var/lib/rpm ]; then
+		# Move the rpmlib back
+		if [ ! -d ${IMAGE_ROOTFS}/var/lib/rpm ]; then
+			mkdir -p ${IMAGE_ROOTFS}/var/lib/
+			mv ${T}/saved_rpmlib/var/lib/rpm ${IMAGE_ROOTFS}/var/lib/
+		fi
+	fi
+	rm -rf ${MULTILIB_TEMP_ROOTFS}
 	mkdir -p ${IMAGE_ROOTFS}
 	mkdir -p ${DEPLOY_DIR_IMAGE}
 
-	if [ "${USE_DEVFS}" != "1" ]; then
+	cp ${COREBASE}/meta/files/deploydir_readme.txt ${DEPLOY_DIR_IMAGE}/README_-_DO_NOT_DELETE_FILES_IN_THIS_DIRECTORY.txt || true
+
+	# If "${IMAGE_ROOTFS}/dev" exists, then the device had been made by
+	# the previous build
+	if [ "${USE_DEVFS}" != "1" -a ! -r "${IMAGE_ROOTFS}/dev" ]; then
 		for devtable in ${@get_devtable_list(d)}; do
+			# Always return ture since there maybe already one when use the
+			# incremental image generation
 			makedevs -r ${IMAGE_ROOTFS} -D $devtable
 		done
 	fi
@@ -111,10 +206,12 @@ fakeroot do_rootfs () {
 
 	insert_feed_uris
 
-	# Run ldconfig on the image to create a valid cache 
-	# (new format for cross arch compatibility)
-	echo executing: ldconfig -r ${IMAGE_ROOTFS} -c new -v
-	ldconfig -r ${IMAGE_ROOTFS} -c new -v
+	if [ "x${LDCONFIGDEPEND}" != "x" ]; then
+		# Run ldconfig on the image to create a valid cache 
+		# (new format for cross arch compatibility)
+		echo executing: ldconfig -r ${IMAGE_ROOTFS} -c new -v
+		ldconfig -r ${IMAGE_ROOTFS} -c new -v
+	fi
 
 	# (re)create kernel modules dependencies
 	# This part is done by kernel-module-* postinstall scripts but if image do
@@ -124,12 +221,11 @@ fakeroot do_rootfs () {
 		KERNEL_VERSION=`cat ${STAGING_KERNEL_DIR}/kernel-abiversion`
 
 		mkdir -p ${IMAGE_ROOTFS}/lib/modules/$KERNEL_VERSION
-		${TARGET_SYS}-depmod-2.6 -a -b ${IMAGE_ROOTFS} -F ${STAGING_KERNEL_DIR}/System.map-$KERNEL_VERSION $KERNEL_VERSION
+		depmod -a -b ${IMAGE_ROOTFS} -F ${STAGING_KERNEL_DIR}/System.map-$KERNEL_VERSION $KERNEL_VERSION
 	fi
 
 	${IMAGE_PREPROCESS_COMMAND}
 
-	ROOTFS_SIZE=`du -ks ${IMAGE_ROOTFS}|awk '{size = $1 * ${IMAGE_OVERHEAD_FACTOR}; print (size > ${IMAGE_ROOTFS_SIZE} ? size : ${IMAGE_ROOTFS_SIZE}) }'`
 	${@get_imagecmds(d)}
 
 	${IMAGE_POSTPROCESS_COMMAND}
@@ -158,7 +254,7 @@ insert_feed_uris () {
 log_check() {
 	for target in $*
 	do
-		lf_path="${WORKDIR}/temp/log.do_$target.${PID}"
+		lf_path="`dirname ${BB_LOGFILE}`/log.do_$target.${PID}"
 		
 		echo "log_check: Using $lf_path as logfile"
 		
@@ -172,13 +268,113 @@ log_check() {
 	done
 }
 
-# set '*' as the rootpassword so the images
-# can decide if they want it or not
+MULTILIBRE_ALLOW_REP =. "${base_bindir}|${base_sbindir}|${bindir}|${sbindir}|${libexecdir}|"
+MULTILIB_CHECK_FILE = "${WORKDIR}/multilib_check.py"
+MULTILIB_TEMP_ROOTFS = "${WORKDIR}/multilib"
 
+multilib_generate_python_file() {
+  cat >${MULTILIB_CHECK_FILE} <<EOF
+import sys, os, os.path
+import re,filecmp
+
+allow_rep=re.compile(re.sub("\|$","","${MULTILIBRE_ALLOW_REP}"))
+error_prompt="Multilib check error:"
+
+files={}
+dirs=raw_input()
+for dir in dirs.split():
+  for root, subfolders, subfiles in os.walk(dir):
+    for file in subfiles:
+      item=os.path.join(root,file)
+      key=str(os.path.join("/",os.path.relpath(item,dir)))
+
+      valid=True;
+      if files.has_key(key):
+        #check whether the file is allow to replace
+        if allow_rep.match(key):
+          valid=True
+        else:
+          if not filecmp.cmp(files[key],item):
+             valid=False
+             print("%s duplicate files %s %s is not the same\n" % (error_prompt, item, files[key]))
+             sys.exit(1)
+
+      #pass the check, add to list
+      if valid:
+        files[key]=item
+EOF
+}
+
+multilib_sanity_check() {
+  multilib_generate_python_file
+  echo $@ | python ${MULTILIB_CHECK_FILE}
+}
+
+get_split_linguas() {
+    for translation in ${IMAGE_LINGUAS}; do
+        translation_split=$(echo ${translation} | awk -F '-' '{print $1}')
+        echo ${translation}
+        echo ${translation_split}
+    done | sort | uniq
+}
+
+rootfs_install_complementary() {
+    # Install complementary packages based upon the list of currently installed packages
+    # e.g. locales, *-dev, *-dbg, etc. This will only attempt to install these packages,
+    # if they don't exist then no error will occur.
+    # Note: every backend needs to call this function explicitly after the normal
+    # package installation
+
+    # Get list of installed packages
+    list_installed_packages arch > ${WORKDIR}/installed_pkgs.txt
+
+    # Apply the globs to all the packages currently installed
+    if [ -n "$1" -a "$1" = "populate_sdk" ] ; then
+        GLOBS="${SDKIMAGE_INSTALL_COMPLEMENTARY}"
+    elif [ -n "$1" ]; then
+        GLOBS="$@"
+    else
+        GLOBS="${IMAGE_INSTALL_COMPLEMENTARY}"
+        # Add locales
+        SPLIT_LINGUAS=`get_split_linguas`
+        PACKAGES_TO_INSTALL=""
+        for lang in $SPLIT_LINGUAS ; do
+            GLOBS="$GLOBS *-locale-$lang"
+        done
+    fi
+
+    if [ "$GLOBS" != "" ] ; then
+        # Use the magic script to do all the work for us :)
+        oe-pkgdata-util glob ${TMPDIR}/pkgdata ${TARGET_VENDOR}-${TARGET_OS} ${WORKDIR}/installed_pkgs.txt "$GLOBS" > ${WORKDIR}/complementary_pkgs.txt
+
+        # Install the packages, if any
+        sed -i '/^$/d' ${WORKDIR}/complementary_pkgs.txt
+        if [ -s ${WORKDIR}/complementary_pkgs.txt ]; then
+            echo "Installing complementary packages"
+            rootfs_install_packages ${WORKDIR}/complementary_pkgs.txt
+        fi
+    fi
+
+    # Workaround for broken shell function dependencies
+    if false ; then
+        get_split_linguas
+    fi
+}
+
+# set '*' as the root password so the images
+# can decide if they want it or not
 zap_root_password () {
 	sed 's%^root:[^:]*:%root:*:%' < ${IMAGE_ROOTFS}/etc/passwd >${IMAGE_ROOTFS}/etc/passwd.new
 	mv ${IMAGE_ROOTFS}/etc/passwd.new ${IMAGE_ROOTFS}/etc/passwd
 } 
+
+# allow openssh accept login with empty password string
+openssh_allow_empty_password () {
+	if [ -e ${IMAGE_ROOTFS}${sysconfdir}/ssh/sshd_config ]; then
+		sed -i 's#.*PermitRootLogin.*#PermitRootLogin yes#' ${IMAGE_ROOTFS}${sysconfdir}/ssh/sshd_config
+		sed -i 's#.*PermitEmptyPasswords.*#PermitEmptyPasswords yes#' ${IMAGE_ROOTFS}${sysconfdir}/ssh/sshd_config
+	fi
+}
 
 # Turn any symbolic /sbin/init link into a file
 remove_init_link () {
@@ -198,8 +394,10 @@ make_zimage_symlink_relative () {
 write_image_manifest () {
 	rootfs_${IMAGE_PKGTYPE}_write_manifest
 
-	rm -f ${DEPLOY_DIR_IMAGE}/${IMAGE_LINK_NAME}.manifest
-        ln -s ${IMAGE_NAME}.rootfs.manifest ${DEPLOY_DIR_IMAGE}/${IMAGE_LINK_NAME}.manifest
+	if [ -n "${IMAGE_LINK_NAME}" ]; then
+		rm -f ${DEPLOY_DIR_IMAGE}/${IMAGE_LINK_NAME}.manifest
+		ln -s ${IMAGE_NAME}.rootfs.manifest ${DEPLOY_DIR_IMAGE}/${IMAGE_LINK_NAME}.manifest
+	fi
 }
 
 # Make login manager(s) enable automatic login.
@@ -211,7 +409,7 @@ set_image_autologin () {
 # Can be use to create /etc/timestamp during image construction to give a reasonably 
 # sane default time setting
 rootfs_update_timestamp () {
-	date -u +%2m%2d%2H%2M%4Y >${IMAGE_ROOTFS}/etc/timestamp
+	date -u +%4Y%2m%2d%2H%2M >${IMAGE_ROOTFS}/etc/timestamp
 }
 
 # Prevent X from being started
@@ -226,14 +424,24 @@ rootfs_trim_schemas () {
 	do
 		# Need this in case no files exist
 		if [ -e $schema ]; then
-			poky-trim-schemas $schema > $schema.new
-        	        mv $schema.new $schema
+			oe-trim-schemas $schema > $schema.new
+			mv $schema.new $schema
 		fi
 	done
 }
 
-
-# export the zap_root_password, and remote_init_link
 EXPORT_FUNCTIONS zap_root_password remove_init_link do_rootfs make_zimage_symlink_relative set_image_autologin rootfs_update_timestamp rootfs_no_x_startup
 
-addtask rootfs before do_build after do_install
+do_fetch[noexec] = "1"
+do_unpack[noexec] = "1"
+do_patch[noexec] = "1"
+do_configure[noexec] = "1"
+do_compile[noexec] = "1"
+do_install[noexec] = "1"
+do_populate_sysroot[noexec] = "1"
+do_package[noexec] = "1"
+do_package_write_ipk[noexec] = "1"
+do_package_write_deb[noexec] = "1"
+do_package_write_rpm[noexec] = "1"
+
+addtask rootfs before do_build

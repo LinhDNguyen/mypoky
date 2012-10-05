@@ -26,20 +26,21 @@ do_qemuimagetest_standalone[depends] += "qemu-native:do_populate_sysroot"
 def qemuimagetest_main(d):
     import sys
     import re
-    import os
+    import shutil
+    import subprocess
     
     """
-    Test Controller for Poky Testing.
+    Test Controller for automated testing.
     """
     
-    casestr = re.compile(r'(?P<scen>\w+\b):(?P<case>\w+$)')
+    casestr = re.compile(r'(?P<scen>\w+\b):(?P<case>\S+$)')
     resultstr = re.compile(r'\s*(?P<case>\w+)\s*(?P<pass>\d+)\s*(?P<fail>\d+)\s*(?P<noresult>\d+)')
-    machine = bb.data.getVar('MACHINE', d, 1)
-    pname = bb.data.getVar('PN', d, 1)
+    machine = d.getVar('MACHINE', True)
+    pname = d.getVar('PN', True)
     
     """function to save test cases running status"""
     def teststatus(test, status, index, length):
-        test_status = bb.data.getVar('TEST_STATUS', d, 1)
+        test_status = d.getVar('TEST_STATUS', True)
         if not os.path.exists(test_status):
             raise bb.build.FuncFailed("No test status file existing under TEST_TMP")
 
@@ -50,36 +51,60 @@ def qemuimagetest_main(d):
 
     """funtion to run each case under scenario"""
     def runtest(scen, case, fulltestpath):
-        resultpath = bb.data.getVar('TEST_RESULT', d, 1)
-        tmppath = bb.data.getVar('TEST_TMP', d, 1)
+        resultpath = d.getVar('TEST_RESULT', True)
+        tmppath = d.getVar('TEST_TMP', True)
 
         """initialize log file for testcase"""
-        logpath = bb.data.getVar('TEST_LOG', d, 1)
+        logpath = d.getVar('TEST_LOG', True)
         bb.utils.mkdirhier("%s/%s" % (logpath, scen))
-        caselog = os.path.join(logpath, "%s/log_%s.%s" % (scen, case, bb.data.getVar('DATETIME', d, 1)))
-        os.system("touch %s" % caselog)
+        caselog = os.path.join(logpath, "%s/log_%s.%s" % (scen, case, d.getVar('DATETIME', True)))
+        subprocess.call("touch %s" % caselog, shell=True)
         
         """export TEST_TMP, TEST_RESULT, DEPLOY_DIR and QEMUARCH"""
-        os.environ["PATH"] = bb.data.getVar("PATH", d, True)
+        os.environ["PATH"] = d.getVar("PATH", True)
         os.environ["TEST_TMP"] = tmppath
         os.environ["TEST_RESULT"] = resultpath
-        os.environ["DEPLOY_DIR"] = bb.data.getVar("DEPLOY_DIR", d, True)
+        os.environ["DEPLOY_DIR"] = d.getVar("DEPLOY_DIR", True)
         os.environ["QEMUARCH"] = machine
         os.environ["QEMUTARGET"] = pname
-        os.environ["DISPLAY"] = bb.data.getVar("DISPLAY", d, True)
-        os.environ["POKYBASE"] = bb.data.getVar("POKYBASE", d, True)
-        os.environ["TOPDIR"] = bb.data.getVar("TOPDIR", d, True)
-        os.environ["TEST_STATUS"] = bb.data.getVar("TEST_STATUS", d, True)
-        os.environ["TARGET_IPSAVE"] = bb.data.getVar("TARGET_IPSAVE", d, True)
-        os.environ["TEST_SERIALIZE"] = bb.data.getVar("TEST_SERIALIZE", d, True)
+        os.environ["DISPLAY"] = d.getVar("DISPLAY", True)
+        os.environ["COREBASE"] = d.getVar("COREBASE", True)
+        os.environ["TOPDIR"] = d.getVar("TOPDIR", True)
+        os.environ["OE_TMPDIR"] = d.getVar("TMPDIR", True)
+        os.environ["TEST_STATUS"] = d.getVar("TEST_STATUS", True)
+        os.environ["TARGET_IPSAVE"] = d.getVar("TARGET_IPSAVE", True)
+        os.environ["TEST_SERIALIZE"] = d.getVar("TEST_SERIALIZE", True)
+        os.environ["SDK_NAME"] = d.getVar("SDK_NAME", True)
 
         """run Test Case"""
         bb.note("Run %s test in scenario %s" % (case, scen))
-        os.system("%s" % fulltestpath)
+        subprocess.call("%s" % fulltestpath, shell=True)
     
+    """function to check testcase list and remove inappropriate cases"""
+    def check_list(list):
+        final_list = []
+        for test in list:
+            (scen, case, fullpath) = test
+
+            """Skip rpm/zypper if package_rpm not set for PACKAGE_CLASSES"""
+            if case.find("zypper") != -1 or case.find("rpm") != -1:
+                if d.getVar("PACKAGE_CLASSES", True).find("rpm", 0, 11) == -1:
+                    bb.note("skip rpm/zypper cases since package_rpm not set in PACKAGE_CLASSES")
+                    continue
+                else:
+                    final_list.append((scen, case, fullpath))
+            else:
+                    final_list.append((scen, case, fullpath))
+
+        if not final_list:
+            raise bb.build.FuncFailed("There is no suitable testcase for this target")
+
+        return final_list
+
     """Generate testcase list in runtime"""
     def generate_list(testlist):
         list = []
+        final_list = []
         if len(testlist) == 0:
             raise bb.build.FuncFailed("No testcase defined in TEST_SCEN")
 
@@ -89,13 +114,13 @@ def qemuimagetest_main(d):
             if n:
                 item = n.group('scen')
                 casefile = n.group('case')
-                for dir in bb.data.getVar("QEMUIMAGETESTS", d, True).split():
+                for dir in d.getVar("QEMUIMAGETESTS", True).split():
                     fulltestcase = os.path.join(dir, item, casefile)
                     if not os.path.isfile(fulltestcase):
                         raise bb.build.FuncFailed("Testcase %s not found" % fulltestcase)
                     list.append((item, casefile, fulltestcase))
             else:
-                for dir in bb.data.getVar("QEMUIMAGETESTS", d, True).split():
+                for dir in d.getVar("QEMUIMAGETESTS", True).split():
                     scenlist = os.path.join(dir, "scenario", machine, pname)
                     if not os.path.isfile(scenlist):
                         raise bb.build.FuncFailed("No scenario list file named %s found" % scenlist)
@@ -111,55 +136,59 @@ def qemuimagetest_main(d):
                        if not os.path.isfile(fulltestcase):
                             raise bb.build.FuncFailed("Testcase %s not found" % fulltestcase)
                        list.append((item, casefile, fulltestcase))
-        return list
+        final_list = check_list(list)
+        return final_list
 
     """Clean tmp folder for testing"""
     def clean_tmp():
-        tmppath = bb.data.getVar('TEST_TMP', d, 1)
+        tmppath = d.getVar('TEST_TMP', True)
 
         if os.path.isdir(tmppath):
             for f in os.listdir(tmppath):
                 tmpfile = os.path.join(tmppath, f)
-                os.remove(tmpfile)
+                if os.path.isfile(tmpfile):
+                    os.remove(tmpfile)
+                elif os.path.isdir(tmpfile):
+                    shutil.rmtree(tmpfile, True)
 
     """Before running testing, clean temp folder first"""
     clean_tmp()
 
     """check testcase folder and create test log folder"""
-    testpath = bb.data.getVar('TEST_DIR', d, 1)
+    testpath = d.getVar('TEST_DIR', True)
     bb.utils.mkdirhier(testpath)
     
-    logpath = bb.data.getVar('TEST_LOG', d, 1)
+    logpath = d.getVar('TEST_LOG', True)
     bb.utils.mkdirhier(logpath)
 
-    tmppath = bb.data.getVar('TEST_TMP', d, 1)
+    tmppath = d.getVar('TEST_TMP', True)
     bb.utils.mkdirhier(tmppath)
 
     """initialize test status file"""
-    test_status = bb.data.getVar('TEST_STATUS', d, 1)
+    test_status = d.getVar('TEST_STATUS', True)
     if os.path.exists(test_status):
         os.remove(test_status)
-    os.system("touch %s" % test_status)
+    subprocess.call("touch %s" % test_status, shell=True)
 
     """initialize result file"""
-    resultpath = bb.data.getVar('TEST_RESULT', d, 1)
+    resultpath = d.getVar('TEST_RESULT', True)
     bb.utils.mkdirhier(resultpath)
-    resultfile = os.path.join(resultpath, "testresult.%s" % bb.data.getVar('DATETIME', d, 1))
+    resultfile = os.path.join(resultpath, "testresult.%s" % d.getVar('DATETIME', True))
     sresultfile = os.path.join(resultpath, "testresult.log")
 
-    machine = bb.data.getVar('MACHINE', d, 1)
+    machine = d.getVar('MACHINE', True)
 
     if os.path.exists(sresultfile):
         os.remove(sresultfile)
-    os.system("touch %s" % resultfile)
+    subprocess.call("touch %s" % resultfile, shell=True)
     os.symlink(resultfile, sresultfile)
     f = open(sresultfile, "a")
-    f.write("\tTest Result for %s\n" % machine)
+    f.write("\tTest Result for %s %s\n" % (machine, pname))
     f.write("\t%-15s%-15s%-15s%-15s\n" % ("Testcase", "PASS", "FAIL", "NORESULT"))
     f.close()
     
     """generate pre-defined testcase list"""
-    testlist = bb.data.getVar('TEST_SCEN', d, 1)
+    testlist = d.getVar('TEST_SCEN', True)
     fulllist = generate_list(testlist)
 
     """Begin testing"""

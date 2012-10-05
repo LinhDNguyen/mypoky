@@ -31,6 +31,7 @@ BitBake build tools.
 import copy, re
 from collections import MutableMapping
 import logging
+import hashlib
 import bb, bb.codeparser
 from bb   import utils
 from bb.COW  import COWDictBase
@@ -38,7 +39,7 @@ from bb.COW  import COWDictBase
 logger = logging.getLogger("BitBake.Data")
 
 __setvar_keyword__ = ["_append", "_prepend"]
-__setvar_regexp__ = re.compile('(?P<base>.*?)(?P<keyword>_append|_prepend)(_(?P<add>.*))?')
+__setvar_regexp__ = re.compile('(?P<base>.*?)(?P<keyword>_append|_prepend)(_(?P<add>.*))?$')
 __expand_var_regexp__ = re.compile(r"\${[^{}]+}")
 __expand_python_regexp__ = re.compile(r"\${@.+?}")
 
@@ -57,7 +58,7 @@ class VariableParse:
             if self.varname and key:
                 if self.varname == key:
                     raise Exception("variable %s references itself!" % self.varname)
-            var = self.d.getVar(key, 1)
+            var = self.d.getVar(key, True)
             if var is not None:
                 self.references.add(key)
                 return var
@@ -68,8 +69,14 @@ class VariableParse:
             code = match.group()[3:-1]
             codeobj = compile(code.strip(), self.varname or "<expansion>", "eval")
 
-            parser = bb.codeparser.PythonParser()
+            parser = bb.codeparser.PythonParser(self.varname, logger)
             parser.parse_python(code)
+            if self.varname:
+                vardeps = self.d.getVarFlag(self.varname, "vardeps", True)
+                if vardeps is None:
+                    parser.log.flush()
+            else:
+                parser.log.flush()
             self.references |= parser.references
             self.execs |= parser.execs
 
@@ -95,7 +102,13 @@ class ExpansionError(Exception):
         self.expression = expression
         self.variablename = varname
         self.exception = exception
-        self.msg = "Failure expanding variable %s, expression was %s which triggered exception %s: %s" % (varname, expression, type(exception).__name__, exception)
+        if varname:
+            if expression:
+                self.msg = "Failure expanding variable %s, expression was %s which triggered exception %s: %s" % (varname, expression, type(exception).__name__, exception)
+            else:
+                self.msg = "Failure expanding variable %s: %s: %s" % (varname, type(exception).__name__, exception)
+        else:
+            self.msg = "Failure expanding expression %s which triggered exception %s: %s" % (expression, type(exception).__name__, exception)
         Exception.__init__(self, self.msg)
         self.args = (varname, expression, exception)
     def __str__(self):
@@ -140,7 +153,7 @@ class DataSmart(MutableMapping):
 
         return varparse
 
-    def expand(self, s, varname):
+    def expand(self, s, varname = None):
         return self.expandWithRefs(s, varname).value
 
 
@@ -172,11 +185,12 @@ class DataSmart(MutableMapping):
             if o not in self._seen_overrides:
                 continue
 
-            vars = self._seen_overrides[o]
+            vars = self._seen_overrides[o].copy()
             for var in vars:
                 name = var[:-l]
                 try:
                     self.setVar(name, self.getVar(var, False))
+                    self.delVar(var)
                 except Exception:
                     logger.info("Untracked delVar")
 
@@ -187,15 +201,20 @@ class DataSmart(MutableMapping):
                 for append in appends:
                     keep = []
                     for (a, o) in self.getVarFlag(append, op) or []:
-                        if o and not o in overrides:
+                        match = True
+                        if o:
+                            for o2 in o.split("_"):
+                                if not o2 in overrides:
+                                    match = False
+                        if not match:
                             keep.append((a ,o))
                             continue
 
-                        if op is "_append":
+                        if op == "_append":
                             sval = self.getVar(append, False) or ""
                             sval += a
                             self.setVar(append, sval)
-                        elif op is "_prepend":
+                        elif op == "_prepend":
                             sval = a + (self.getVar(append, False) or "")
                             self.setVar(append, sval)
 
@@ -258,17 +277,19 @@ class DataSmart(MutableMapping):
         # more cookies for the cookie monster
         if '_' in var:
             override = var[var.rfind('_')+1:]
-            if override not in self._seen_overrides:
-                self._seen_overrides[override] = set()
-            self._seen_overrides[override].add( var )
+            if len(override) > 0:
+                if override not in self._seen_overrides:
+                    self._seen_overrides[override] = set()
+                self._seen_overrides[override].add( var )
 
         # setting var
-        self.dict[var]["content"] = value
+        self.dict[var]["_content"] = value
 
-    def getVar(self, var, exp):
-        value = self.getVarFlag(var, "content")
+    def getVar(self, var, expand=False, noweakdefault=False):
+        value = self.getVarFlag(var, "_content", False, noweakdefault)
 
-        if exp and value:
+        # Call expand() separately to make use of the expand cache
+        if expand and value:
             return self.expand(value, var)
         return value
 
@@ -295,22 +316,34 @@ class DataSmart(MutableMapping):
 
         self.delVar(key)
 
+    def appendVar(self, key, value):
+        value = (self.getVar(key, False) or "") + value
+        self.setVar(key, value)
+
+    def prependVar(self, key, value):
+        value = value + (self.getVar(key, False) or "")
+        self.setVar(key, value)
+
     def delVar(self, var):
         self.expand_cache = {}
         self.dict[var] = {}
+        if '_' in var:
+            override = var[var.rfind('_')+1:]
+            if override and override in self._seen_overrides and var in self._seen_overrides[override]:
+                self._seen_overrides[override].remove(var)
 
     def setVarFlag(self, var, flag, flagvalue):
         if not var in self.dict:
             self._makeShadowCopy(var)
         self.dict[var][flag] = flagvalue
 
-    def getVarFlag(self, var, flag, expand=False):
+    def getVarFlag(self, var, flag, expand=False, noweakdefault=False):
         local_var = self._findVar(var)
         value = None
         if local_var:
             if flag in local_var:
                 value = copy.copy(local_var[flag])
-            elif flag == "content" and "defaultval" in local_var:
+            elif flag == "_content" and "defaultval" in local_var and not noweakdefault:
                 value = copy.copy(local_var["defaultval"])
         if expand and value:
             value = self.expand(value, None)
@@ -326,12 +359,20 @@ class DataSmart(MutableMapping):
         if var in self.dict and flag in self.dict[var]:
             del self.dict[var][flag]
 
+    def appendVarFlag(self, key, flag, value):
+        value = (self.getVarFlag(key, flag, False) or "") + value
+        self.setVarFlag(key, flag, value)
+
+    def prependVarFlag(self, key, flag, value):
+        value = value + (self.getVarFlag(key, flag, False) or "")
+        self.setVarFlag(key, flag, value)
+
     def setVarFlags(self, var, flags):
         if not var in self.dict:
             self._makeShadowCopy(var)
 
         for i in flags:
-            if i == "content":
+            if i == "_content":
                 continue
             self.dict[var][i] = flags[i]
 
@@ -341,7 +382,7 @@ class DataSmart(MutableMapping):
 
         if local_var:
             for i in local_var:
-                if i == "content":
+                if i.startswith("_"):
                     continue
                 flags[i] = local_var[i]
 
@@ -358,10 +399,10 @@ class DataSmart(MutableMapping):
             content = None
 
             # try to save the content
-            if "content" in self.dict[var]:
-                content  = self.dict[var]["content"]
+            if "_content" in self.dict[var]:
+                content  = self.dict[var]["_content"]
                 self.dict[var]            = {}
-                self.dict[var]["content"] = content
+                self.dict[var]["_content"] = content
             else:
                 del self.dict[var]
 
@@ -398,18 +439,22 @@ class DataSmart(MutableMapping):
                 yield key
 
     def __iter__(self):
-        seen = set()
-        def _keys(d):
-            if "_data" in d:
-                for key in _keys(d["_data"]):
-                    yield key
-
+        def keylist(d):        
+            klist = set()
             for key in d:
-                if key != "_data":
-                    if not key in seen:
-                        seen.add(key)
-                        yield key
-        return _keys(self.dict)
+                if key == "_data":
+                    continue
+                if not d[key]:
+                    continue
+                klist.add(key)
+
+            if "_data" in d:
+                klist |= keylist(d["_data"])
+
+            return klist
+
+        for k in keylist(self.dict):
+             yield k
 
     def __len__(self):
         return len(frozenset(self))
@@ -426,3 +471,16 @@ class DataSmart(MutableMapping):
 
     def __delitem__(self, var):
         self.delVar(var)
+
+    def get_hash(self):
+        data = {}
+        config_whitelist = set((self.getVar("BB_HASHCONFIG_WHITELIST", True) or "").split())
+        keys = set(key for key in iter(self) if not key.startswith("__"))
+        for key in keys:
+            if key in config_whitelist:
+                continue
+            value = self.getVar(key, False) or ""
+            data.update({key:value})
+
+        data_str = str([(k, data[k]) for k in sorted(data.keys())])
+        return hashlib.md5(data_str).hexdigest()

@@ -2,24 +2,20 @@ inherit siteinfo
 
 ARM_INSTRUCTION_SET = "arm"
 
-def qt_arch(d):
-    import bb, re
-    arch = bb.data.getVar('TARGET_ARCH', d, 1)
-    if re.match("^i.86$", arch):
-        arch = "i386"
-    elif re.match("^arm.*", arch):
-        arch = "arm"
-    elif arch == "x86_64":
-        arch = "x86"
-    elif arch == "mipsel":
-        arch = "mips"
-    return arch
+set_arch() {
+   case ${TARGET_ARCH} in
+       arm*)     QT_ARCH=arm ;;
+       i*86*)    QT_ARCH=i386 ;;
+       mips*)    QT_ARCH=mips ;;
+       powerpc*) QT_ARCH=powerpc ;;
+       x86_64*)  QT_ARCH=x86_64 ;;
+   esac
+}
 
-def qt_endian(d):
-    import bb
-    if bb.data.getVar('SITEINFO_ENDIANESS', d, True) == "le":
-        return "-little-endian"
-    elif bb.data.getVar('SITEINFO_ENDIANESS', d, True) == "be":
-        return "-big-endian"
-    else:
-        assert False
+set_endian() {
+    if [ ${SITEINFO_ENDIANNESS} = "le" ] ; then
+        QT_ENDIAN="-little-endian"
+    elif [ ${SITEINFO_ENDIANNESS} = "be" ] ; then
+        QT_ENDIAN="-big-endian"
+    fi
+}

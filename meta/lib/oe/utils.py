@@ -14,40 +14,39 @@ def ifelse(condition, iftrue = True, iffalse = False):
         return iffalse
 
 def conditional(variable, checkvalue, truevalue, falsevalue, d):
-    if bb.data.getVar(variable,d,1) == checkvalue:
+    if d.getVar(variable,1) == checkvalue:
         return truevalue
     else:
         return falsevalue
 
 def less_or_equal(variable, checkvalue, truevalue, falsevalue, d):
-    if float(bb.data.getVar(variable,d,1)) <= float(checkvalue):
+    if float(d.getVar(variable,1)) <= float(checkvalue):
         return truevalue
     else:
         return falsevalue
 
 def version_less_or_equal(variable, checkvalue, truevalue, falsevalue, d):
-    result = bb.vercmp(bb.data.getVar(variable,d,True), checkvalue)
+    result = bb.utils.vercmp_string(d.getVar(variable,True), checkvalue)
     if result <= 0:
         return truevalue
     else:
         return falsevalue
 
 def contains(variable, checkvalues, truevalue, falsevalue, d):
-    val = bb.data.getVar(variable,d,1)
+    val = d.getVar(variable, True)
     if not val:
         return falsevalue
-    matches = 0
-    if type(checkvalues).__name__ == "str":
-        checkvalues = [checkvalues]
-    for value in checkvalues:
-        if val.find(value) != -1:
-            matches = matches + 1
-    if matches == len(checkvalues):
+    val = set(val.split())
+    if isinstance(checkvalues, basestring):
+        checkvalues = set(checkvalues.split())
+    else:
+        checkvalues = set(checkvalues)
+    if checkvalues.issubset(val):
         return truevalue
     return falsevalue
 
 def both_contain(variable1, variable2, checkvalue, d):
-    if bb.data.getVar(variable1,d,1).find(checkvalue) != -1 and bb.data.getVar(variable2,d,1).find(checkvalue) != -1:
+    if d.getVar(variable1,1).find(checkvalue) != -1 and d.getVar(variable2,1).find(checkvalue) != -1:
         return checkvalue
     else:
         return ""
@@ -57,7 +56,12 @@ def prune_suffix(var, suffixes, d):
     # remove it if found
     for suffix in suffixes:
         if var.endswith(suffix):
-            return var.replace(suffix, "")
+            var = var.replace(suffix, "")
+
+    prefix = d.getVar("MLPREFIX", True)
+    if prefix and var.startswith(prefix):
+        var = var.replace(prefix, "")
+
     return var
 
 def str_filter(f, str, d):
@@ -78,3 +82,30 @@ def param_bool(cfg, field, dflt = None):
     elif strvalue in ('no', 'n', 'false', 'f', '0'):
         return False
     raise ValueError("invalid value for boolean parameter '%s': '%s'" % (field, value))
+
+def inherits(d, *classes):
+    """Return True if the metadata inherits any of the specified classes"""
+    return any(bb.data.inherits_class(cls, d) for cls in classes)
+
+def features_backfill(var,d):
+    # This construct allows the addition of new features to variable specified
+    # as var
+    # Example for var = "DISTRO_FEATURES"
+    # This construct allows the addition of new features to DISTRO_FEATURES
+    # that if not present would disable existing functionality, without
+    # disturbing distributions that have already set DISTRO_FEATURES.
+    # Distributions wanting to elide a value in DISTRO_FEATURES_BACKFILL should
+    # add the feature to DISTRO_FEATURES_BACKFILL_CONSIDERED
+
+    backfill = (d.getVar(var+"_BACKFILL", True) or "").split()
+    considered = (d.getVar(var+"_BACKFILL_CONSIDERED", True) or "").split()
+
+    addfeatures = []
+    for feature in backfill:
+        if feature not in considered:
+            addfeatures.append(feature)
+
+    if addfeatures:
+        return " %s" % (" ".join(addfeatures))
+    else:
+        return ""

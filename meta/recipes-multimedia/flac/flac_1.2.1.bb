@@ -3,7 +3,7 @@ DESCRIPTION = "FLAC stands for Free Lossless Audio Codec, an audio format simila
 HOMEPAGE = "http://flac.sourceforge.net/"
 BUGTRACKER = "http://sourceforge.net/tracker/?group_id=13478&atid=113478"
 SECTION = "libs"
-LICENSE = "FDLv1.2 & GPLv2+ & LGPLv2.1+ & BSD"
+LICENSE = "GFDL-1.2 & GPLv2+ & LGPLv2.1+ & BSD"
 LIC_FILES_CHKSUM = "file://COPYING.FDL;md5=ad1419ecc56e060eccf8184a87c4285f \
                     file://src/Makefile.am;beginline=1;endline=16;md5=8dee151a56a3122f064a9dce771db37d \
                     file://COPYING.GPL;md5=079b27cd65c86dbc1b6997ffde902735 \
@@ -14,19 +14,20 @@ LIC_FILES_CHKSUM = "file://COPYING.FDL;md5=ad1419ecc56e060eccf8184a87c4285f \
                     file://include/FLAC/all.h;beginline=64;endline=69;md5=64474f2b22e9e77b28d8b8b25c983a48"
 DEPENDS = "libogg"
 
-PR = "r0"
+PR = "r2"
 
 SRC_URI = "${SOURCEFORGE_MIRROR}/flac/flac-${PV}.tar.gz \
-           file://disable-xmms-plugin.patch;patch=1 \
-           file://flac-gcc43-fixes.patch;patch=1 \
-           file://xmms.m4"
+           file://disable-xmms-plugin.patch \
+           file://flac-gcc43-fixes.patch \
+           file://xmms.m4 \
+           file://0001-No-AltiVec-on-SPE.patch"
 
 SRC_URI[md5sum] = "153c8b15a54da428d1f0fadc756c22c7"
 SRC_URI[sha256sum] = "9635a44bceb478bbf2ee8a785cf6986fba525afb5fad1fd4bba73cf71f2d3edf"
 
 S = "${WORKDIR}/flac-${PV}"
 
-inherit autotools
+inherit autotools gettext
 
 EXTRA_OECONF = "--disable-oggtest --disable-id3libtest \
                 --with-ogg-libraries=${STAGING_LIBDIR} \
@@ -35,6 +36,8 @@ EXTRA_OECONF = "--disable-oggtest --disable-id3libtest \
                 --without-xmms-exec-prefix \
                 --without-libiconv-prefix \
                 --without-id3lib"
+
+EXTRA_OECONF += "${@bb.utils.contains("TUNE_FEATURES", "altivec", " --enable-altivec", " --disable-altivec", d)}"
 
 PACKAGES += "libflac libflac++ liboggflac liboggflac++"
 FILES_${PN} = "${bindir}/*"

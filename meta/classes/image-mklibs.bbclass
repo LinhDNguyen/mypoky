@@ -16,17 +16,20 @@ mklibs_optimize_image_doit() {
 		> ${WORKDIR}/mklibs/executables.list
 
 	case ${TARGET_ARCH} in
-		powerpc | mips )
-			dynamic_loader="/lib/ld.so.1"
+		powerpc | mips | microblaze )
+			dynamic_loader="${base_libdir}/ld.so.1"
+			;;
+		powerpc64)
+			dynamic_loader="${base_libdir}/ld64.so.1"
 			;;
 		x86_64)
-			dynamic_loader="/lib/ld-linux-x86-64.so.2"
+			dynamic_loader="${base_libdir}/ld-linux-x86-64.so.2"
 			;;
 		i586 )
-			dynamic_loader="/lib/ld-linux.so.2"
+			dynamic_loader="${base_libdir}/ld-linux.so.2"
 			;;
 		arm )
-			dynamic_loader="/lib/ld-linux.so.3"
+			dynamic_loader="${base_libdir}/ld-linux.so.3"
 			;;
 		* )
 			dynamic_loader="/unknown_dynamic_linker"
@@ -35,6 +38,7 @@ mklibs_optimize_image_doit() {
 
 	mklibs -v \
 		--ldlib ${dynamic_loader} \
+		--libdir ${baselib} \
 		--sysroot ${PKG_CONFIG_SYSROOT_DIR} \
 		--root ${IMAGE_ROOTFS} \
 		--target `echo ${TARGET_PREFIX} | sed 's/-$//' ` \
@@ -57,7 +61,7 @@ mklibs_optimize_image_doit() {
 mklibs_optimize_image() {
 	for img in ${MKLIBS_OPTIMIZED_IMAGES}
 	do
-		if [ "${img}" == "${PN}" ] || [ "${img}" == "all" ]
+		if [ "${img}" = "${PN}" ] || [ "${img}" = "all" ]
 		then
 			mklibs_optimize_image_doit
 			break

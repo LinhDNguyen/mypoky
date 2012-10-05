@@ -4,7 +4,7 @@ formatting commands and produces formatted output."
 SECTION = "base"
 HOMEPAGE = "ftp://ftp.gnu.org/gnu/groff/"
 LICENSE = "GPLv2"
-PR = "r0"
+PR = "r2"
 
 LIC_FILES_CHKSUM = "file://COPYING;md5=d32239bcb673463ab874e80d47fae504"
 
@@ -18,6 +18,7 @@ DEPENDS_virtclass-native = ""
 
 inherit autotools
 
+EXTRA_OECONF = "--without-x"
 PARALLEL_MAKE = ""
 
 do_configure_prepend() {
@@ -32,5 +33,32 @@ do_configure_prepend() {
 		    ${S}/doc/Makefile.sub
 	fi
 }
+
+do_install_append() {
+	# Some distros have both /bin/perl and /usr/bin/perl, but we set perl location
+	# for target as /usr/bin/perl, so fix it to /usr/bin/perl.
+	for i in afmtodit mmroff; do
+		if [ -f ${D}${bindir}/$i ]; then
+			sed -i -e '1s,#!.*perl,#! ${USRBINPATH}/env perl,' ${D}${bindir}/$i
+		fi
+	done
+}
+
+do_install_append_virtclass-native() {
+	# Some distros have both /bin/perl and /usr/bin/perl, but we set perl location
+	# for target as /usr/bin/perl, so fix it to /usr/bin/perl.
+	for i in afmtodit mmroff; do
+		if [ -f ${D}${bindir}/$i ]; then
+			sed -i -e '1s,#!.*perl,#! ${USRBINPATH}/env perl,' ${D}${bindir}/$i
+		fi
+	done
+
+	create_cmdline_wrapper ${D}/${bindir}/groff \
+		-F${STAGING_DIR_NATIVE}${datadir_native}/groff/${PV}/font \
+		-M${STAGING_DIR_NATIVE}${datadir_native}/groff/${PV}/tmac
+}
+
+FILES_${PN} += "${libdir}/${BPN}/site-tmac \
+                ${libdir}/${BPN}/groffer/"
 
 BBCLASSEXTEND = "native"

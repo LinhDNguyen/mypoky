@@ -3,14 +3,16 @@ DESCRIPTION = "A collection of all the free software tools you need to \
 work on and format DocBook documents."
 HOMEPAGE = "http://sources.redhat.com/docbook-tools/"
 SECTION = "console/utils"
-PRIORITY = "required"
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://COPYING;md5=94d55d512a9ba36caa9b7df079bae19f"
 DEPENDS = "openjade-native sgmlspl-native docbook-dsssl-stylesheets-native docbook-sgml-dtd-3.1-native"
 
-PR = "r1"
+PR = "r3"
 
-SRC_URI = "ftp://sources.redhat.com/pub/docbook-tools/new-trials/SOURCES/docbook-utils-${PV}.tar.gz"
+SRC_URI = "\
+	ftp://sources.redhat.com/pub/docbook-tools/new-trials/SOURCES/docbook-utils-${PV}.tar.gz \
+	file://re.patch \
+"
 
 SRC_URI[md5sum] = "6b41b18c365c01f225bc417cf632d81c"
 SRC_URI[sha256sum] = "48faab8ee8a7605c9342fb7b906e0815e3cee84a489182af38e8f7c0df2e92e9"
@@ -19,13 +21,17 @@ inherit autotools native
 
 do_configure_prepend() {
 	# Fix hard-coded references to /etc/sgml
-	sed -i -e "s|/etc/sgml|${sysconfdir}/sgml|g" bin/jw.in
-	sed -i -e "s|/etc/sgml|${sysconfdir}/sgml|g" doc/man/Makefile.am
-	sed -i -e "s|/etc/sgml|${sysconfdir}/sgml|g" doc/HTML/Makefile.am
+	if [ ! -e ${S}/.sed_done ]; then
+		sed -i -e "s|/etc/sgml|${sysconfdir}/sgml|g" bin/jw.in
+		sed -i -e "s|/etc/sgml|${sysconfdir}/sgml|g" doc/man/Makefile.am
+		sed -i -e "s|/etc/sgml|${sysconfdir}/sgml|g" doc/HTML/Makefile.am
 
-	# Point jw to the native sysroot catalog
-	sed -i -e 's|^SGML_EXTRA_CATALOGS=""|SGML_EXTRA_CATALOGS=":${sysconfdir}/sgml/catalog"|g' bin/jw.in
+		# Point jw to the native sysroot catalog
+		sed -i -e 's|^SGML_EXTRA_CATALOGS=""|SGML_EXTRA_CATALOGS=":${sysconfdir}/sgml/catalog"|g' bin/jw.in
+		touch ${S}/.sed_done
+	fi
 }
+do_unpack[cleandirs] += "${S}"
 
 do_install() {
 	install -d ${D}${bindir}

@@ -32,19 +32,25 @@ import warnings
 from traceback import format_exception
 try:
     import bb
-except RuntimeError, exc:
+except RuntimeError as exc:
     sys.exit(str(exc))
 from bb import event
 import bb.msg
 from bb import cooker
 from bb import ui
 from bb import server
-from bb.server import none
-#from bb.server import xmlrpc
 
-__version__ = "1.11.0"
+__version__ = "1.16.0"
 logger = logging.getLogger("BitBake")
 
+# Unbuffer stdout to avoid log truncation in the event
+# of an unorderly exit as well as to provide timely
+# updates to log files for use with tail
+try:
+    if sys.stdout.name == '<stdout>':
+        sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+except:
+    pass
 
 class BBConfiguration(object):
     """
@@ -58,10 +64,11 @@ class BBConfiguration(object):
 
 
 def get_ui(config):
-    if config.ui:
-        interface = config.ui
-    else:
-        interface = 'knotty'
+    if not config.ui:
+        # modify 'ui' attribute because it is also read by cooker
+        config.ui = os.environ.get('BITBAKE_UI', 'knotty')
+
+    interface = config.ui
 
     try:
         # Dynamically load the UI based on the ui name. Although we
@@ -71,7 +78,7 @@ def get_ui(config):
         return getattr(module, interface).main
     except AttributeError:
         sys.exit("FATAL: Invalid user interface '%s' specified.\n"
-                 "Valid interfaces: depexp, goggle, ncurses, knotty [default]." % interface)
+                 "Valid interfaces: depexp, goggle, ncurses, hob, knotty [default]." % interface)
 
 
 # Display bitbake/OE warnings via the BitBake.Warnings logger, ignoring others"""
@@ -104,7 +111,7 @@ It expects that BBFILES is defined, which is a space separated list of files to
 be executed.  BBFILES does support wildcards.
 Default BBFILES are the .bb files in the current directory.""")
 
-    parser.add_option("-b", "--buildfile", help = "execute the task against this .bb file, rather than a package from BBFILES.",
+    parser.add_option("-b", "--buildfile", help = "execute the task against this .bb file, rather than a package from BBFILES. Does not handle any dependencies.",
                action = "store", dest = "buildfile", default = None)
 
     parser.add_option("-k", "--continue", help = "continue as much as possible after an error. While the target that failed, and those that depend on it, cannot be remade, the other dependencies of these targets can be processed all the same.",
@@ -119,8 +126,14 @@ Default BBFILES are the .bb files in the current directory.""")
     parser.add_option("-c", "--cmd", help = "Specify task to execute. Note that this only executes the specified task for the providee and the packages it depends on, i.e. 'compile' does not implicitly call stage for the dependencies (IOW: use only if you know what you are doing). Depending on the base.bbclass a listtasks tasks is defined and will show available tasks",
                action = "store", dest = "cmd")
 
+    parser.add_option("-C", "--clear-stamp", help = "Invalidate the stamp for the specified cmd such as 'compile' and run the default task for the specified target(s)",
+                action = "store", dest = "invalidate_stamp")
+
     parser.add_option("-r", "--read", help = "read the specified file before bitbake.conf",
-               action = "append", dest = "file", default = [])
+               action = "append", dest = "prefile", default = [])
+
+    parser.add_option("-R", "--postread", help = "read the specified file after bitbake.conf",
+                      action = "append", dest = "postfile", default = [])
 
     parser.add_option("-v", "--verbose", help = "output more chit-chat to the terminal",
                action = "store_true", dest = "verbose", default = False)
@@ -137,16 +150,13 @@ Default BBFILES are the .bb files in the current directory.""")
     parser.add_option("-p", "--parse-only", help = "quit after parsing the BB files (developers only)",
                action = "store_true", dest = "parse_only", default = False)
 
-    parser.add_option("-d", "--disable-psyco", help = "disable using the psyco just-in-time compiler (not recommended)",
-               action = "store_true", dest = "disable_psyco", default = False)
-
-    parser.add_option("-s", "--show-versions", help = "show current and preferred versions of all packages",
+    parser.add_option("-s", "--show-versions", help = "show current and preferred versions of all recipes",
                action = "store_true", dest = "show_versions", default = False)
 
     parser.add_option("-e", "--environment", help = "show the global or per-package environment (this is what used to be bbread)",
                action = "store_true", dest = "show_environment", default = False)
 
-    parser.add_option("-g", "--graphviz", help = "emit the dependency trees of the specified packages in the dot syntax",
+    parser.add_option("-g", "--graphviz", help = "emit the dependency trees of the specified packages in the dot syntax, and the pn-buildlist to show the build list",
                 action = "store_true", dest = "dot_graph", default = False)
 
     parser.add_option("-I", "--ignore-deps", help = """Assume these dependencies don't exist and are already provided (equivalent to ASSUME_PROVIDED). Useful to make dependency graphs more appealing""",
@@ -161,58 +171,101 @@ Default BBFILES are the .bb files in the current directory.""")
     parser.add_option("-u", "--ui", help = "userinterface to use",
                action = "store", dest = "ui")
 
+    parser.add_option("-t", "--servertype", help = "Choose which server to use, none, process or xmlrpc",
+               action = "store", dest = "servertype")
+
     parser.add_option("", "--revisions-changed", help = "Set the exit code depending on whether upstream floating revisions have changed or not",
                action = "store_true", dest = "revisions_changed", default = False)
 
+    parser.add_option("", "--server-only", help = "Run bitbake without UI,  the frontend can connect with bitbake server itself",
+               action = "store_true", dest = "server_only", default = False)
+
+    parser.add_option("-B", "--bind", help = "The name/address for the bitbake server to bind to",
+               action = "store", dest = "bind", default = False)
+    parser.add_option("", "--no-setscene", help = "Do not run any setscene tasks, forces builds",
+               action = "store_true", dest = "nosetscene", default = False)
     options, args = parser.parse_args(sys.argv)
 
     configuration = BBConfiguration(options)
     configuration.pkgs_to_build.extend(args[1:])
-    configuration.initial_path = os.environ['PATH']
 
     ui_main = get_ui(configuration)
 
-    loghandler = event.LogHandler()
-    logger.addHandler(loghandler)
+    # Server type can be xmlrpc, process or none currently, if nothing is specified,
+    # the default server is process
+    if configuration.servertype:
+        server_type = configuration.servertype
+    else:
+        server_type = 'process'
 
-    #server = bb.server.xmlrpc
-    server = bb.server.none
+    try:
+        module = __import__("bb.server", fromlist = [server_type])
+        server = getattr(module, server_type)
+    except AttributeError:
+        sys.exit("FATAL: Invalid server type '%s' specified.\n"
+                 "Valid interfaces: xmlrpc, process [default], none." % servertype)
+
+    if configuration.server_only:
+        if configuration.servertype != "xmlrpc":
+            sys.exit("FATAL: If '--server-only' is defined, we must set the servertype as 'xmlrpc'.\n")
+        if not configuration.bind:
+            sys.exit("FATAL: The '--server-only' option requires a name/address to bind to with the -B option.\n")
+
+    if configuration.bind and configuration.servertype != "xmlrpc":
+        sys.exit("FATAL: If '-B' or '--bind' is defined, we must set the servertype as 'xmlrpc'.\n")
 
     # Save a logfile for cooker into the current working directory. When the
     # server is daemonized this logfile will be truncated.
     cooker_logfile = os.path.join(os.getcwd(), "cooker.log")
 
-    bb.utils.init_logger(bb.msg, configuration.verbose, configuration.debug,
+    bb.msg.init_msgconfig(configuration.verbose, configuration.debug,
                          configuration.debug_domains)
 
+    # Ensure logging messages get sent to the UI as events
+    handler = bb.event.LogHandler()
+    logger.addHandler(handler)
+
+    # Before we start modifying the environment we should take a pristine
+    # copy for possible later use
+    initialenv = os.environ.copy()
     # Clear away any spurious environment variables. But don't wipe the
     # environment totally. This is necessary to ensure the correct operation
     # of the UIs (e.g. for DISPLAY, etc.)
     bb.utils.clean_environment()
 
-    cooker = bb.cooker.BBCooker(configuration, server)
+    server = server.BitBakeServer()
+    if configuration.bind:
+        server.initServer((configuration.bind, 0))
+    else:
+        server.initServer()
+
+    idle = server.getServerIdleCB()
+
+    cooker = bb.cooker.BBCooker(configuration, idle, initialenv)
     cooker.parseCommandLine()
 
-    serverinfo = server.BitbakeServerInfo(cooker.server)
+    server.addcooker(cooker)
+    server.saveConnectionDetails()
+    server.detach(cooker_logfile)
 
-    server.BitBakeServerFork(cooker, cooker.server, serverinfo, cooker_logfile)
+    # Should no longer need to ever reference cooker
     del cooker
 
-    logger.removeHandler(loghandler)
+    logger.removeHandler(handler)
 
-    # Setup a connection to the server (cooker)
-    server_connection = server.BitBakeServerConnection(serverinfo)
+    if not configuration.server_only:
+        # Setup a connection to the server (cooker)
+        server_connection = server.establishConnection()
 
-    # Launch the UI
-    if configuration.ui:
-        ui = configuration.ui
+        try:
+            return server.launchUI(ui_main, server_connection.connection, server_connection.events)
+        finally:
+            bb.event.ui_queue = []
+            server_connection.terminate()
     else:
-        ui = "knotty"
+        print("server address: %s, server port: %s" % (server.serverinfo.host, server.serverinfo.port))
 
-    try:
-        return server.BitbakeUILauch().launch(serverinfo, ui_main, server_connection.connection, server_connection.events)
-    finally:
-        server_connection.terminate()
+    return 1
 
 if __name__ == "__main__":
     try:
@@ -222,3 +275,4 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc(5)
     sys.exit(ret)
+

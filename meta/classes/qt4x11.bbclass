@@ -1,7 +1,9 @@
-DEPENDS_prepend = "${@["qt4-x11-free ", ""][(bb.data.getVar('PN', d, 1)[:12] == 'qt4-x11-free')]}"
+QT4DEPENDS ?= "qt4-x11 "
+DEPENDS_prepend = "${QT4DEPENDS}"
 
 inherit qmake2
 
+QT_BASE_NAME = "qt4"
 QT_DIR_NAME = "qt4"
 QT_LIBINFIX = ""
 

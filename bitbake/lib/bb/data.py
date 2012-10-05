@@ -49,6 +49,7 @@ from bb import data_smart
 from bb import codeparser
 import bb
 
+logger = data_smart.logger
 _dict_type = data_smart.DataSmart
 
 def init():
@@ -159,16 +160,17 @@ def expandKeys(alterdata, readdata = None):
         ekey = todolist[key]
         renameVar(key, ekey, alterdata)
 
-def inheritFromOS(d):
-    """Inherit variables from the environment."""
+def inheritFromOS(d, savedenv, permitted):
+    """Inherit variables from the initial environment."""
     exportlist = bb.utils.preserved_envvars_exported()
-    for s in os.environ.keys():
-        try:
-            setVar(s, os.environ[s], d)
-            if s in exportlist:
-                setVarFlag(s, "export", True, d)
-        except TypeError:
-            pass
+    for s in savedenv.keys():
+        if s in permitted:
+            try:
+                setVar(s, getVar(s, savedenv, True), d)
+                if s in exportlist:
+                    setVarFlag(s, "export", True, d)
+            except TypeError:
+                pass
 
 def emit_var(var, o=sys.__stdout__, d = init(), all=False):
     """Emit a variable to be sourced by a shell."""
@@ -187,7 +189,7 @@ def emit_var(var, o=sys.__stdout__, d = init(), all=False):
         val = getVar(var, d, 1)
     except (KeyboardInterrupt, bb.build.FuncFailed):
         raise
-    except Exception, exc:
+    except Exception as exc:
         o.write('# expansion of %s threw %s: %s\n' % (var, exc.__class__.__name__, str(exc)))
         return 0
 
@@ -234,25 +236,20 @@ def emit_env(o=sys.__stdout__, d = init(), all=False):
         for key in keys:
             emit_var(key, o, d, all and not isfunc) and o.write('\n')
 
-def export_vars(d):
-    keys = (key for key in d.keys() if d.getVarFlag(key, "export"))
-    ret = {}
-    for k in keys:
-        try:
-            v = d.getVar(k, True)
-            if v: 
-                ret[k] = v
-        except (KeyboardInterrupt, bb.build.FuncFailed):
-            raise
-        except Exception, exc:
-            pass
-    return ret
+def exported_keys(d):
+    return (key for key in d.keys() if not key.startswith('__') and
+                                      d.getVarFlag(key, 'export') and
+                                      not d.getVarFlag(key, 'unexport'))
 
-def export_envvars(v, d):
-    for s in os.environ.keys():
-        if s not in v:
-            v[s] = os.environ[s]
-    return v
+def exported_vars(d):
+    for key in exported_keys(d):
+        try:
+            value = d.getVar(key, True)
+        except Exception:
+            pass
+
+        if value is not None:
+            yield key, str(value)
 
 def emit_func(func, o=sys.__stdout__, d = init()):
     """Emits all items in the data store in a format such that it can be sourced by a shell."""
@@ -262,48 +259,73 @@ def emit_func(func, o=sys.__stdout__, d = init()):
         emit_var(key, o, d, False) and o.write('\n')
 
     emit_var(func, o, d, False) and o.write('\n')
-    newdeps = bb.codeparser.ShellParser().parse_shell(d.getVar(func, True))
+    newdeps = bb.codeparser.ShellParser(func, logger).parse_shell(d.getVar(func, True))
     seen = set()
     while newdeps:
         deps = newdeps
         seen |= deps
         newdeps = set()
         for dep in deps:
-            if bb.data.getVarFlag(dep, "func", d):
+            if d.getVarFlag(dep, "func"):
                emit_var(dep, o, d, False) and o.write('\n')
-               newdeps |=  bb.codeparser.ShellParser().parse_shell(d.getVar(dep, True))
+               newdeps |=  bb.codeparser.ShellParser(dep, logger).parse_shell(d.getVar(dep, True))
         newdeps -= seen
 
 def update_data(d):
     """Performs final steps upon the datastore, including application of overrides"""
     d.finalize()
 
-def build_dependencies(key, keys, shelldeps, d):
+def build_dependencies(key, keys, shelldeps, vardepvals, d):
     deps = set()
+    vardeps = d.getVarFlag(key, "vardeps", True)
     try:
-        if d.getVarFlag(key, "func"):
+        if key[-1] == ']':
+            vf = key[:-1].split('[')
+            value = d.getVarFlag(vf[0], vf[1], False)
+        else:
+            value = d.getVar(key, False)
+
+        if key in vardepvals:
+           value =  d.getVarFlag(key, "vardepvalue", True)
+        elif d.getVarFlag(key, "func"):
             if d.getVarFlag(key, "python"):
-                parsedvar = d.expandWithRefs(d.getVar(key, False), key)
-                parser = bb.codeparser.PythonParser()
+                parsedvar = d.expandWithRefs(value, key)
+                parser = bb.codeparser.PythonParser(key, logger)
+                if parsedvar.value and "\t" in parsedvar.value:
+                    logger.warn("Variable %s contains tabs, please remove these (%s)" % (key, d.getVar("FILE", True)))
                 parser.parse_python(parsedvar.value)
                 deps = deps | parser.references
             else:
-                parsedvar = d.expandWithRefs(d.getVar(key, False), key)
-                parser = bb.codeparser.ShellParser()
+                parsedvar = d.expandWithRefs(value, key)
+                parser = bb.codeparser.ShellParser(key, logger)
                 parser.parse_shell(parsedvar.value)
                 deps = deps | shelldeps
+            if vardeps is None:
+                parser.log.flush()
             deps = deps | parsedvar.references
             deps = deps | (keys & parser.execs) | (keys & parsedvar.execs)
         else:
-            parser = d.expandWithRefs(d.getVar(key, False), key)
+            parser = d.expandWithRefs(value, key)
             deps |= parser.references
             deps = deps | (keys & parser.execs)
-        deps |= set((d.getVarFlag(key, "vardeps", True) or "").split())
+
+        # Add varflags, assuming an exclusion list is set
+        varflagsexcl = d.getVar('BB_SIGNATURE_EXCLUDE_FLAGS', True)
+        if varflagsexcl:
+            varfdeps = []
+            varflags = d.getVarFlags(key)
+            if varflags:
+                for f in varflags:
+                    if f not in varflagsexcl:
+                        varfdeps.append('%s[%s]' % (key, f))
+            if varfdeps:
+                deps |= set(varfdeps)
+
+        deps |= set((vardeps or "").split())
         deps -= set((d.getVarFlag(key, "vardepsexclude", True) or "").split())
-    except:
-        bb.note("Error expanding variable %s" % key)
-        raise
-    return deps
+    except Exception as e:
+        raise bb.data_smart.ExpansionError(key, None, e)
+    return deps, value
     #bb.note("Variable %s references %s and calls %s" % (key, str(deps), str(execs)))
     #d.setVarFlag(key, "vardeps", deps)
 
@@ -311,12 +333,14 @@ def generate_dependencies(d):
 
     keys = set(key for key in d.keys() if not key.startswith("__"))
     shelldeps = set(key for key in keys if d.getVarFlag(key, "export") and not d.getVarFlag(key, "unexport"))
+    vardepvals = set(key for key in keys if d.getVarFlag(key, "vardepvalue"))
 
     deps = {}
+    values = {}
 
-    tasklist = bb.data.getVar('__BBTASKS', d) or []
+    tasklist = d.getVar('__BBTASKS') or []
     for task in tasklist:
-        deps[task] = build_dependencies(task, keys, shelldeps, d)
+        deps[task], values[task] = build_dependencies(task, keys, shelldeps, vardepvals, d)
         newdeps = deps[task]
         seen = set()
         while newdeps:
@@ -325,11 +349,11 @@ def generate_dependencies(d):
             newdeps = set()
             for dep in nextdeps:
                 if dep not in deps:
-                    deps[dep] = build_dependencies(dep, keys, shelldeps, d)
+                    deps[dep], values[dep] = build_dependencies(dep, keys, shelldeps, vardepvals, d)
                 newdeps |=  deps[dep]
             newdeps -= seen
-        #print "For %s: %s" % (task, str(taskdeps[task]))
-    return tasklist, deps
+        #print "For %s: %s" % (task, str(deps[task]))
+    return tasklist, deps, values
 
 def inherits_class(klass, d):
     val = getVar('__inherit_cache', d) or []

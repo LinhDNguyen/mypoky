@@ -7,10 +7,9 @@ HOMEPAGE = "http://www.gnu.org/software/bison/"
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://COPYING;md5=eb723b61539feef013de476e68b5c50a"
 SECTION = "devel"
-PRIORITY = "optional"
-DEPENDS = "gettext bison-native"
+DEPENDS = "bison-native flex-native"
 
-PR = "r0"
+PR = "r1"
 
 BASE_SRC_URI = "${GNU_MIRROR}/bison/bison-${PV}.tar.gz \
          file://bison-2.3_m4.patch"
@@ -23,7 +22,7 @@ SRC_URI[sha256sum] = "52f78aa4761a74ceb7fdf770f3554dd84308c3b93c4255e3a5c17558ec
 DEPENDS_virtclass-native = "gettext-native"
 SRC_URI_virtclass-native = "${BASE_SRC_URI}"
 
-inherit autotools
+inherit autotools gettext
 acpaths = "-I ${S}/m4"
 
 do_install_append_virtclass-native() {

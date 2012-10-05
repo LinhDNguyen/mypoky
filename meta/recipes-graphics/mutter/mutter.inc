@@ -1,21 +1,18 @@
 SECTION = "x11/wm"
 DESCRIPTION = "Metacity is the boring window manager for the adult in you. Mutter is metacity + clutter."
 LICENSE = "GPLv2"
-DEPENDS = "startup-notification gtk+ gconf clutter-1.4 gdk-pixbuf-native intltool glib-2.0-native"
+DEPENDS = "startup-notification gtk+ gconf clutter-1.8 gdk-pixbuf-native intltool glib-2.0-native"
 # gobject-introspection
 inherit gnome update-alternatives
 
-ALTERNATIVE_NAME = "x-window-manager"
-ALTERNATIVE_LINK = "${bindir}/x-window-manager"
-ALTERNATIVE_PATH = "${bindir}/mutter"
+ALTERNATIVE_${PN} = "x-window-manager"
+ALTERNATIVE_TARGET[x-window-manager] = "${bindir}/mutter"
 ALTERNATIVE_PRIORITY = "11"
-
-COMPATIBLE_MACHINE = "(zylonite|mx31litekit|omap-3430ldp|omap-3430sdp|mx31ads|qemuarm|qemux86|ipodtouch|atom-pc|menlow)"
-
 
 EXTRA_OECONF += "--disable-verbose	\
 	         --disable-xinerama	\
 	         --without-introspection \
+	         --without-libcanberra \
 		 --with-clutter"
 
 #RDEPENDS_${PN} = "zenity"

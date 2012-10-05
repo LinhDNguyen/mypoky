@@ -13,11 +13,15 @@ FILES_${PN} = "\
     ${gcclibdir}/${TARGET_SYS}/${BINV}/lib* \
     ${gcclibdir}/${TARGET_SYS}/${BINV}/include \
     ${gcclibdir}/${TARGET_SYS}/${BINV}/include-fixed \
+    ${gcclibdir}/${TARGET_SYS}/${BINV}/plugin/include/ \
+    ${gcclibdir}/${TARGET_SYS}/${BINV}/plugin/gtype.* \
     ${includedir}/c++/${BINV} \
     ${prefix}/${TARGET_SYS}/bin/* \
     ${prefix}/${TARGET_SYS}/lib/* \
     ${prefix}/${TARGET_SYS}/usr/include/* \
     "
+INSANE_SKIP_${PN} += "dev-so"
+
 FILES_${PN}-doc = "\
     ${infodir} \
     ${mandir} \
@@ -39,7 +43,17 @@ do_install () {
 
 	# We use libiberty from binutils
 	rm -f ${D}${prefix}/${TARGET_SYS}/lib/libiberty.a
+	# Not sure where the strange paths come from
+	rm -f ${D}${libdir}/../lib/libiberty.a
 	rm -f ${D}${libdir}/libiberty.a
+
+	# Cleanup empty directories which are not shipped
+	# we use rmdir instead of 'rm -f' to ensure the non empty directories are not deleted
+	# ${D}${libdir}/../lib only seems to appear with SDKMACHINE=i686
+	local empty_dirs="${D}${libdir}/../lib ${D}${prefix}/${TARGET_SYS}/lib ${D}${prefix}/${TARGET_SYS} ${D}${includedir}"
+	for i in $empty_dirs; do
+		[ -d $i ] && rmdir --ignore-fail-on-non-empty $i
+	done
 
 	# Insert symlinks into libexec so when tools without a prefix are searched for, the correct ones are
 	# found.
@@ -48,5 +62,7 @@ do_install () {
 	for t in ar as ld nm objcopy objdump ranlib strip g77 gcc cpp gfortran; do
 		ln -sf ${bindir}/${TARGET_PREFIX}$t $dest$t
 	done
+
+	chown -R root:root ${D}
 }
 

@@ -21,13 +21,14 @@ EXTRA_OECONF = " \
                --without-perl \
                --without-python \
                --without-java \
+               --with-pdftops=none \
                "
 
 
 do_configure() {
 	gnu-configize
 	libtoolize --force
-	DSOFLAGS="${LDFLAGS}" oe_runconf
+	DSOFLAGS="${LDFLAGS}" SERVERBIN="${libdir}/cups" oe_runconf
 }
 
 do_compile () {
@@ -54,15 +55,25 @@ fakeroot do_install () {
 
    # This directory gets installed with perms 511, which makes packaging fail
    chmod 0711 "${D}/${localstatedir}/run/cups/certs"
+   rmdir ${D}/${libdir}/${BPN}/driver
 }
 
 python do_package_append() {
-	# Change permissions back the way they were, they probably had a reason...
-	workdir = bb.data.getVar('WORKDIR', d, 1)
-	os.system('chmod 0511 %s/install/cups/var/run/cups/certs' % workdir)
+    import subprocess
+    # Change permissions back the way they were, they probably had a reason...
+    workdir = d.getVar('WORKDIR', True)
+    subprocess.call('chmod 0511 %s/install/cups/var/run/cups/certs' % workdir, shell=True)
 }
 
 PACKAGES =+ "${PN}-lib ${PN}-libimage"
+
+FILES_${PN} += "${libdir}/cups/backend \
+		${libdir}/cups/cgi-bin \
+		${libdir}/cups/filter \
+		${libdir}/cups/monitor \
+		${libdir}/cups/notifier \
+		${libdir}/cups/daemon \
+	       "
 
 FILES_${PN}-lib = "${libdir}/libcups.so.*"
 
@@ -83,3 +94,8 @@ FILES_${PN} += "${datadir}/doc/cups/images \
                 ${datadir}/doc/cups/*.css \
                 ${datadir}/icons/ \
                "
+
+SYSROOT_PREPROCESS_FUNCS += "cups_sysroot_preprocess"
+cups_sysroot_preprocess () {
+	sed -i ${SYSROOT_DESTDIR}${bindir_crossscripts}/cups-config -e 's:cups_datadir=.*:cups_datadir=${datadir}/cups:' -e 's:cups_serverbin=.*:cups_serverbin=${libdir}/cups:'
+}

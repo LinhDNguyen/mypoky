@@ -28,11 +28,12 @@
 import os
 import sys
 import logging
+import shlex
 import bb
 import bb.msg
 import bb.process
 from contextlib import nested
-from bb import data, event, mkdirhier, utils
+from bb import data, event, utils
 
 bblogger = logging.getLogger('BitBake')
 logger = logging.getLogger('BitBake.Build')
@@ -52,7 +53,7 @@ class FuncFailed(Exception):
         self.logfile = logfile
         self.name = name
         if name:
-            self.msg = "Function '%s' failed" % name
+            self.msg = 'Function failed: %s' % name
         else:
             self.msg = "Function failed"
 
@@ -69,15 +70,18 @@ class TaskBase(event.Event):
 
     def __init__(self, t, d ):
         self._task = t
-        self._package = bb.data.getVar("PF", d, 1)
+        self._package = d.getVar("PF", True)
         event.Event.__init__(self)
-        self._message = "package %s: task %s: %s" % (bb.data.getVar("PF", d, 1), t, bb.event.getName(self)[4:])
+        self._message = "recipe %s: task %s: %s" % (d.getVar("PF", True), t, self.getDisplayName())
 
     def getTask(self):
         return self._task
 
     def setTask(self, task):
         self._task = task
+
+    def getDisplayName(self):
+        return bb.event.getName(self)[4:]
 
     task = property(getTask, setTask, None, "task property")
 
@@ -90,9 +94,20 @@ class TaskSucceeded(TaskBase):
 class TaskFailed(TaskBase):
     """Task execution failed"""
 
+    def __init__(self, task, logfile, metadata, errprinted = False):
+        self.logfile = logfile
+        self.errprinted = errprinted
+        super(TaskFailed, self).__init__(task, metadata)
+
+class TaskFailedSilent(TaskBase):
+    """Task execution failed (silently)"""
     def __init__(self, task, logfile, metadata):
         self.logfile = logfile
-        super(TaskFailed, self).__init__(task, metadata)
+        super(TaskFailedSilent, self).__init__(task, metadata)
+
+    def getDisplayName(self):
+        # Don't need to tell the user it was silent
+        return "Failed"
 
 class TaskInvalid(TaskBase):
 
@@ -120,7 +135,8 @@ class LogTee(object):
 
     def __repr__(self):
         return '<LogTee {0}>'.format(self.name)
-
+    def flush(self):
+        self.outfile.flush()
 
 def exec_func(func, d, dirs = None):
     """Execute an BB 'function'"""
@@ -148,12 +164,9 @@ def exec_func(func, d, dirs = None):
         adir = dirs[-1]
     else:
         adir = data.getVar('B', d, 1)
-        if not os.path.exists(adir):
-            adir = None
+        bb.utils.mkdirhier(adir)
 
     ispython = flags.get('python')
-    if flags.get('fakeroot') and not flags.get('task'):
-        bb.fatal("Function %s specifies fakeroot but isn't a task?!" % func)
 
     lockflag = flags.get('lockfiles')
     if lockflag:
@@ -162,7 +175,19 @@ def exec_func(func, d, dirs = None):
         lockfiles = None
 
     tempdir = data.getVar('T', d, 1)
-    runfile = os.path.join(tempdir, 'run.{0}.{1}'.format(func, os.getpid()))
+
+    # or func allows items to be executed outside of the normal
+    # task set, such as buildhistory
+    task = data.getVar('BB_RUNTASK', d, 1) or func
+    if task == func:
+        taskfunc = task
+    else:
+        taskfunc = "%s.%s" % (task, func)
+
+    runfmt = data.getVar('BB_RUNFMT', d, 1) or "run.{func}.{pid}"
+    runfn = runfmt.format(taskfunc=taskfunc, task=task, func=func, pid=os.getpid())
+    runfile = os.path.join(tempdir, runfn)
+    bb.utils.mkdirhier(os.path.dirname(runfile))
 
     with bb.utils.fileslocked(lockfiles):
         if ispython:
@@ -181,17 +206,19 @@ def exec_func_python(func, d, runfile, cwd=None):
     """Execute a python BB 'function'"""
 
     bbfile = d.getVar('FILE', True)
-    try:
-        olddir = os.getcwd()
-    except OSError:
-        olddir = None
     code = _functionfmt.format(function=func, body=d.getVar(func, True))
     bb.utils.mkdirhier(os.path.dirname(runfile))
     with open(runfile, 'w') as script:
         script.write(code)
 
     if cwd:
+        try:
+            olddir = os.getcwd()
+        except OSError:
+            olddir = None
         os.chdir(cwd)
+
+    bb.debug(2, "Executing python function %s" % func)
 
     try:
         comp = utils.better_compile(code, func, bbfile)
@@ -202,10 +229,15 @@ def exec_func_python(func, d, runfile, cwd=None):
 
         raise FuncFailed(func, None)
     finally:
-        if olddir:
-            os.chdir(olddir)
+        bb.debug(2, "Python function %s finished" % func)
 
-def exec_func_shell(function, d, runfile, cwd=None):
+        if cwd and olddir:
+            try:
+                os.chdir(olddir)
+            except OSError:
+                pass
+
+def exec_func_shell(func, d, runfile, cwd=None):
     """Execute a shell function from the metadata
 
     Note on directory behavior.  The 'dirs' varflag should contain a list
@@ -218,31 +250,36 @@ def exec_func_shell(function, d, runfile, cwd=None):
 
     with open(runfile, 'w') as script:
         script.write('#!/bin/sh -e\n')
-        if logger.isEnabledFor(logging.DEBUG):
+        data.emit_func(func, script, d)
+
+        if bb.msg.loggerVerboseLogs:
             script.write("set -x\n")
-        data.emit_func(function, script, d)
         if cwd:
             script.write("cd %s\n" % cwd)
-        script.write("%s\n" % function)
-        os.fchmod(script.fileno(), 0775)
+        script.write("%s\n" % func)
 
-    env = {
-        'PATH': d.getVar('PATH', True),
-        'LC_ALL': 'C',
-    }
+    os.chmod(runfile, 0775)
 
     cmd = runfile
+    if d.getVarFlag(func, 'fakeroot'):
+        fakerootcmd = d.getVar('FAKEROOT', True)
+        if fakerootcmd:
+            cmd = [fakerootcmd, runfile]
 
-    if logger.isEnabledFor(logging.DEBUG):
+    if bb.msg.loggerDefaultVerbose:
         logfile = LogTee(logger, sys.stdout)
     else:
         logfile = sys.stdout
 
+    bb.debug(2, "Executing shell function %s" % func)
+
     try:
-        bb.process.run(cmd, env=env, shell=False, stdin=NULL, log=logfile)
+        bb.process.run(cmd, shell=False, stdin=NULL, log=logfile)
     except bb.process.CmdError:
         logfn = d.getVar('BB_LOGFILE', True)
-        raise FuncFailed(function, logfn)
+        raise FuncFailed(func, logfn)
+
+    bb.debug(2, "Shell function %s finished" % func)
 
 def _task_data(fn, task, d):
     localdata = data.createCopy(d)
@@ -273,22 +310,46 @@ def _exec_task(fn, task, d, quieterr):
         bb.fatal("T variable not set, unable to build")
 
     bb.utils.mkdirhier(tempdir)
+
+    # Determine the logfile to generate
+    logfmt = localdata.getVar('BB_LOGFMT', True) or 'log.{task}.{pid}'
+    logbase = logfmt.format(task=task, pid=os.getpid())
+
+    # Document the order of the tasks...
+    logorder = os.path.join(tempdir, 'log.task_order')
+    try:
+        logorderfile = file(logorder, 'a')
+    except OSError:
+        logger.exception("Opening log file '%s'", logorder)
+        pass
+    logorderfile.write('{0} ({1}): {2}\n'.format(task, os.getpid(), logbase))
+    logorderfile.close()
+
+    # Setup the courtesy link to the logfn
     loglink = os.path.join(tempdir, 'log.{0}'.format(task))
-    logfn = os.path.join(tempdir, 'log.{0}.{1}'.format(task, os.getpid()))
+    logfn = os.path.join(tempdir, logbase)
     if loglink:
         bb.utils.remove(loglink)
 
         try:
-           os.symlink(logfn, loglink)
+           os.symlink(logbase, loglink)
         except OSError:
            pass
 
     prefuncs = localdata.getVarFlag(task, 'prefuncs', expand=True)
     postfuncs = localdata.getVarFlag(task, 'postfuncs', expand=True)
 
+    class ErrorCheckHandler(logging.Handler):
+        def __init__(self):
+            self.triggered = False
+            logging.Handler.__init__(self, logging.ERROR)
+        def emit(self, record):
+            self.triggered = True
+
     # Handle logfiles
     si = file('/dev/null', 'r')
     try:
+        bb.utils.mkdirhier(os.path.dirname(logfn))
         logfile = file(logfn, 'w')
     except OSError:
         logger.exception("Opening log file '%s'", logfn)
@@ -307,9 +368,15 @@ def _exec_task(fn, task, d, quieterr):
     # Ensure python logging goes to the logfile
     handler = logging.StreamHandler(logfile)
     handler.setFormatter(logformatter)
+    # Always enable full debug output into task logfiles
+    handler.setLevel(logging.DEBUG - 2)
     bblogger.addHandler(handler)
 
+    errchk = ErrorCheckHandler()
+    bblogger.addHandler(errchk)
+
     localdata.setVar('BB_LOGFILE', logfn)
+    localdata.setVar('BB_RUNTASK', task)
 
     event.fire(TaskStarted(task, localdata), localdata)
     try:
@@ -319,9 +386,12 @@ def _exec_task(fn, task, d, quieterr):
         for func in (postfuncs or '').split():
             exec_func(func, localdata)
     except FuncFailed as exc:
-        if not quieterr:
+        if quieterr:
+            event.fire(TaskFailedSilent(task, logfn, localdata), localdata)
+        else:
+            errprinted = errchk.triggered
             logger.error(str(exc))
-            event.fire(TaskFailed(task, logfn, localdata), localdata)
+            event.fire(TaskFailed(task, logfn, localdata, errprinted), localdata)
         return 1
     finally:
         sys.stdout.flush()
@@ -364,7 +434,7 @@ def exec_task(fn, task, d):
         if not quieterr:
             logger.error("Build of %s failed" % (task))
             logger.error(format_exc())
-            failedevent = TaskFailed(task, None, d)
+            failedevent = TaskFailed(task, None, d, True)
             event.fire(failedevent, d)
         return 1
 
@@ -382,10 +452,10 @@ def stamp_internal(taskname, d, file_name):
         taskflagname = taskname.replace("_setscene", "")
 
     if file_name:
-        stamp = d.stamp[file_name]
+        stamp = d.stamp_base[file_name].get(taskflagname) or d.stamp[file_name]
         extrainfo = d.stamp_extrainfo[file_name].get(taskflagname) or ""
     else:
-        stamp = d.getVar('STAMP', True)
+        stamp = d.getVarFlag(taskflagname, 'stamp-base', True) or d.getVar('STAMP', True)
         file_name = d.getVar('BB_FILENAME', True)
         extrainfo = d.getVarFlag(taskflagname, 'stamp-extra-info', True) or ""
 
@@ -394,15 +464,46 @@ def stamp_internal(taskname, d, file_name):
 
     stamp = bb.parse.siggen.stampfile(stamp, file_name, taskname, extrainfo)
 
-    bb.utils.mkdirhier(os.path.dirname(stamp))
+    stampdir = os.path.dirname(stamp)
+    if bb.parse.cached_mtime_noerror(stampdir) == 0:
+        bb.utils.mkdirhier(stampdir)
 
     return stamp
+
+def stamp_cleanmask_internal(taskname, d, file_name):
+    """
+    Internal stamp helper function to generate stamp cleaning mask
+    Returns the stamp path+filename
+
+    In the bitbake core, d can be a CacheData and file_name will be set.
+    When called in task context, d will be a data store, file_name will not be set
+    """
+    taskflagname = taskname
+    if taskname.endswith("_setscene") and taskname != "do_setscene":
+        taskflagname = taskname.replace("_setscene", "")
+
+    if file_name:
+        stamp = d.stamp_base_clean[file_name].get(taskflagname) or d.stampclean[file_name]
+        extrainfo = d.stamp_extrainfo[file_name].get(taskflagname) or ""
+    else:
+        stamp = d.getVarFlag(taskflagname, 'stamp-base-clean', True) or d.getVar('STAMPCLEAN', True)
+        file_name = d.getVar('BB_FILENAME', True)
+        extrainfo = d.getVarFlag(taskflagname, 'stamp-extra-info', True) or ""
+
+    if not stamp:
+        return
+
+    return bb.parse.siggen.stampcleanmask(stamp, file_name, taskname, extrainfo)
 
 def make_stamp(task, d, file_name = None):
     """
     Creates/updates a stamp for a given task
     (d can be a data dict or dataCache)
     """
+    cleanmask = stamp_cleanmask_internal(task, d, file_name)
+    if cleanmask:
+        bb.utils.remove(cleanmask)
+
     stamp = stamp_internal(task, d, file_name)
     # Remove the file and recreate to force timestamp
     # change on broken NFS filesystems
@@ -411,6 +512,12 @@ def make_stamp(task, d, file_name = None):
         f = open(stamp, "w")
         f.close()
 
+    # If we're in task context, write out a signature file for each task
+    # as it completes
+    if not task.endswith("_setscene") and task != "do_setscene" and not file_name:
+        file_name = d.getVar('BB_FILENAME', True)
+        bb.parse.siggen.dump_sigtask(file_name, task, d.getVar('STAMP', True), True)
+
 def del_stamp(task, d, file_name = None):
     """
     Removes a stamp for a given task
@@ -418,6 +525,24 @@ def del_stamp(task, d, file_name = None):
     """
     stamp = stamp_internal(task, d, file_name)
     bb.utils.remove(stamp)
+
+def write_taint(task, d, file_name = None):
+    """
+    Creates a "taint" file which will force the specified task and its
+    dependents to be re-run the next time by influencing the value of its
+    taskhash.
+    (d can be a data dict or dataCache)
+    """
+    import uuid
+    if file_name:
+        taintfn = d.stamp[file_name] + '.' + task + '.taint'
+    else:
+        taintfn = d.getVar('STAMP', True) + '.' + task + '.taint'
+    bb.utils.mkdirhier(os.path.dirname(taintfn))
+    # The specific content of the taint file is not really important,
+    # we just need it to be random, so a random UUID is used
+    with open(taintfn, 'w') as taintf:
+        taintf.write(str(uuid.uuid4()))
 
 def stampfile(taskname, d, file_name = None):
     """
@@ -450,12 +575,14 @@ def add_tasks(tasklist, d):
                 deptask = data.expand(flags[name], d)
                 task_deps[name][task] = deptask
         getTask('depends')
+        getTask('rdepends')
         getTask('deptask')
         getTask('rdeptask')
         getTask('recrdeptask')
         getTask('nostamp')
         getTask('fakeroot')
         getTask('noexec')
+        getTask('umask')
         task_deps['parents'][task] = []
         for dep in flags['deps']:
             dep = data.expand(dep, d)

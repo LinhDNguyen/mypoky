@@ -1,3 +1,4 @@
-TARGET_CC_ARCH = "-mcpu=supersparc"
-BASE_PACKAGE_ARCH = "supersparc"
-FEED_ARCH = "supersparc" 
+TUNE_ARCH = "sparc"
+
+TUNE_CCARGS = "-mcpu=supersparc"
+TUNE_PKGARCH = "supersparc"

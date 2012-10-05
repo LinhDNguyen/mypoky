@@ -3,7 +3,6 @@ DESCRIPTION = "The nfs-utils package provides a daemon for the kernel \
 NFS server and related tools."
 HOMEPAGE = "http://nfs.sourceforge.net/"
 SECTION = "console/network"
-PRIORITY = "optional"
 
 LICENSE = "GPLv2+"
 LIC_FILES_CHKSUM = "file://COPYING;md5=0636e73ff0215e8d672dc4c32c317bb3"
@@ -13,10 +12,12 @@ DEPENDS = "libcap libnfsidmap libevent util-linux tcp-wrappers"
 RDEPENDS_${PN} = "portmap"
 RRECOMMENDS_${PN} = "kernel-module-nfsd"
 
-PR = "r2"
+PR = "r5"
 
 SRC_URI = "${SOURCEFORGE_MIRROR}/nfs/nfs-utils-${PV}.tar.bz2 \
            file://nfs-utils-1.0.6-uclibc.patch \
+           file://nfs-utils-1.2.3-uclibc-libio.h.patch \
+           file://nfs-utils-nfsctl-x32-fix.patch \
            file://nfsserver"
 
 SRC_URI[md5sum] = "1131dc5f27c4f3905a6e7ee0d594fd4d"
@@ -44,6 +45,11 @@ EXTRA_OECONF = "--with-statduser=nobody \
                 --with-statedir=/var/lib/nfs"
 
 INHIBIT_AUTO_STAGE = "1"
+
+PACKAGES =+ "${PN}-client ${PN}-stats"
+FILES_${PN}-client = "${base_sbindir}/*mount.nfs*"
+FILES_${PN}-stats = "${sbindir}/mountstats ${sbindir}/nfsiostat"
+RDEPENDS_${PN}-stats = "python"
 
 do_install_append () {
 	install -d ${D}${sysconfdir}/init.d

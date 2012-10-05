@@ -73,8 +73,9 @@ def clean_package_list(package_list):
 def get_latest_released_meego_source_package_list():
     "Returns list of all the name os packages in the latest meego distro"
 
-    
-    f = open("/tmp/Meego-1.0", "r")
+    if not os.path.isfile("/tmp/Meego-1.1"):
+        os.mknod("/tmp/Meego-1.1")
+    f = open("/tmp/Meego-1.1", "r")
     package_names = []
     for line in f:
         package_names.append(line[:-1] + ":" + "main") # Also strip the '\n' at the end
@@ -98,12 +99,12 @@ def get_source_package_list_from_url(url, section):
 
 def get_latest_released_fedora_source_package_list():
     "Returns list of all the name os packages in the latest fedora distro"
-    latest = find_latest_numeric_release("http://download.fedora.redhat.com/pub/fedora/linux/releases/")
+    latest = find_latest_numeric_release("http://archive.fedoraproject.org/pub/fedora/linux/releases/")
 
-    package_names = get_source_package_list_from_url("http://download.fedora.redhat.com/pub/fedora/linux/releases/%s/Fedora/source/SRPMS/" % latest, "main")
+    package_names = get_source_package_list_from_url("http://archive.fedoraproject.org/pub/fedora/linux/releases/%s/Fedora/source/SRPMS/" % latest, "main")
 
 #    package_names += get_source_package_list_from_url("http://download.fedora.redhat.com/pub/fedora/linux/releases/%s/Everything/source/SPRMS/" % latest, "everything")
-    package_names += get_source_package_list_from_url("http://download.fedora.redhat.com/pub/fedora/linux/updates/%s/SRPMS/" % latest, "updates")
+    package_names += get_source_package_list_from_url("http://archive.fedoraproject.org/pub/fedora/linux/updates/%s/SRPMS/" % latest, "updates")
 
     package_list=clean_package_list(package_names)
         
@@ -148,7 +149,7 @@ def get_debian_style_source_package_list(url, section):
     import urllib
     sock = urllib.urlopen(url)
     import tempfile
-    tmpfile = tempfile.NamedTemporaryFile(mode='wb', prefix='poky.', suffix='.tmp', delete=False)
+    tmpfile = tempfile.NamedTemporaryFile(mode='wb', prefix='oecore.', suffix='.tmp', delete=False)
     tmpfilename=tmpfile.name
     tmpfile.write(sock.read())
     sock.close()
@@ -275,34 +276,34 @@ def compare_in_distro_packages_list(distro_check_dir, d):
     localdata = bb.data.createCopy(d)
     pkglst_dir = os.path.join(distro_check_dir, "package_lists")
     matching_distros = []
-    pn = bb.data.getVar('PN', d, True)
-    recipe_name = bb.data.getVar('PN', d, True)
+    pn = d.getVar('PN', True)
+    recipe_name = d.getVar('PN', True)
     bb.note("Checking: %s" % pn)
 
     trim_dict = dict({"-native":"-native", "-cross":"-cross", "-initial":"-initial"})
 
     if pn.find("-native") != -1:
         pnstripped = pn.split("-native")
-        bb.data.setVar('OVERRIDES', "pn-" + pnstripped[0] + ":" + bb.data.getVar('OVERRIDES', d, True), localdata)
+        localdata.setVar('OVERRIDES', "pn-" + pnstripped[0] + ":" + d.getVar('OVERRIDES', True))
         bb.data.update_data(localdata)
         recipe_name = pnstripped[0]
 
     if pn.find("-cross") != -1:
         pnstripped = pn.split("-cross")
-        bb.data.setVar('OVERRIDES', "pn-" + pnstripped[0] + ":" + bb.data.getVar('OVERRIDES', d, True), localdata)
+        localdata.setVar('OVERRIDES', "pn-" + pnstripped[0] + ":" + d.getVar('OVERRIDES', True))
         bb.data.update_data(localdata)
         recipe_name = pnstripped[0]
 
     if pn.find("-initial") != -1:
         pnstripped = pn.split("-initial")
-        bb.data.setVar('OVERRIDES', "pn-" + pnstripped[0] + ":" + bb.data.getVar('OVERRIDES', d, True), localdata)
+        localdata.setVar('OVERRIDES', "pn-" + pnstripped[0] + ":" + d.getVar('OVERRIDES', True))
         bb.data.update_data(localdata)
         recipe_name = pnstripped[0]
 
     bb.note("Recipe: %s" % recipe_name)
-    tmp = bb.data.getVar('DISTRO_PN_ALIAS', localdata, True)
+    tmp = localdata.getVar('DISTRO_PN_ALIAS', True)
 
-    distro_exceptions = dict({"Poky":'Poky', "OpenedHand":'OpenedHand', "Intel":'Intel', "Upstream":'Upstream', "WindRiver":'Windriver', "OSPDT":'OSPDT Approved'})
+    distro_exceptions = dict({"OE-Core":'OE-Core', "OpenedHand":'OpenedHand', "Intel":'Intel', "Upstream":'Upstream', "Windriver":'Windriver', "OSPDT":'OSPDT Approved', "Poky":'poky'})
 
     if tmp:
         list = tmp.split(' ')
@@ -335,26 +336,40 @@ def compare_in_distro_packages_list(distro_check_dir, d):
 
     
     if tmp != None:
-         matching_distros.append(tmp)
-
+	list = tmp.split(' ')
+	for item in list:
+            matching_distros.append(item)
     bb.note("Matching: %s" % matching_distros)
     return matching_distros
 
-def save_distro_check_result(result, datetime, d):
-    pn = bb.data.getVar('PN', d, True)
-    logdir = bb.data.getVar('LOG_DIR', d, True)
+def create_log_file(d, logname):
+    import subprocess
+    logpath = d.getVar('LOG_DIR', True)
+    bb.utils.mkdirhier(logpath)
+    logfn, logsuffix = os.path.splitext(logname)
+    logfile = os.path.join(logpath, "%s.%s%s" % (logfn, d.getVar('DATETIME', True), logsuffix))
+    if not os.path.exists(logfile):
+            slogfile = os.path.join(logpath, logname)
+            if os.path.exists(slogfile):
+                    os.remove(slogfile)
+            subprocess.call("touch %s" % logfile, shell=True)
+            os.symlink(logfile, slogfile)
+            d.setVar('LOG_FILE', logfile)
+    return logfile
+
+
+def save_distro_check_result(result, datetime, result_file, d):
+    pn = d.getVar('PN', True)
+    logdir = d.getVar('LOG_DIR', True)
     if not logdir:
         bb.error("LOG_DIR variable is not defined, can't write the distro_check results")
         return
     if not os.path.isdir(logdir):
         os.makedirs(logdir)
-    result_file = os.path.join(logdir, "distrocheck.csv")
     line = pn
     for i in result:
         line = line + "," + i
-    if not os.path.exists(result_file):
-        open(result_file, 'w+b').close() # touch the file so that the next open won't fail
-    f = open(result_file, "a+b")
+    f = open(result_file, "a")
     import fcntl
     fcntl.lockf(f, fcntl.LOCK_EX)
     f.seek(0, os.SEEK_END) # seek to the end of file

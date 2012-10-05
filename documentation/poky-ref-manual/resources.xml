@@ -1,25 +1,27 @@
-<!DOCTYPE appendix PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
-"http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+"http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd"
+[<!ENTITY % poky SYSTEM "../poky.ent"> %poky; ] >
 
-<appendix id='resources'>
-<title>Contributing to Poky</title>
+<chapter id='resources'>
+<title>Contributing to the Yocto Project</title>
 
 <section id='resources-intro'>
     <title>Introduction</title>
     <para>
-        We're happy for people to experiment with Poky and there are a number of places to
-        find help if you run into difficulties or find bugs. To find out how to download
-        source code see the <link linkend='intro-getit'>Obtaining Poky</link> section of
-        the Introduction.
+        The Yocto Project team is happy for people to experiment with the Yocto Project.
+        A number of places exist to find help if you run into difficulties or find bugs. 
+        To find out how to download source code,
+        see the "<ulink url='&YOCTO_DOCS_DEV_URL;#local-yp-release'>Yocto Project Release</ulink>"
+        list item in the Yocto Project Development Manual.
     </para>
 </section>
 
 <section id='resources-bugtracker'>
-    <title>Bugtracker</title>
+    <title>Tracking Bugs</title>
 
     <para>
-        Problems with Poky should be reported using the Bugzilla application at 
-        <ulink url='http://bugzilla.yoctoproject.org/'></ulink>.
+        If you find problems with the Yocto Project, you should report them using the 
+        Bugzilla application at <ulink url='&YOCTO_BUGZILLA_URL;'></ulink>.
     </para>
 </section>
 
@@ -27,138 +29,86 @@
     <title>Mailing lists</title>
 
     <para>
-        To subscribe to the mailing lists click on the following URLs and follow the instructions:
+        There are a number of mailing lists maintained by the Yocto Project as well as
+        related OpenEmbedded mailing lists for discussion, patch submission and announcements.
+        To subscribe to one of the following mailing lists, click on the appropriate URL
+        in the following list and follow the instructions:
+        <itemizedlist>
+            <listitem><para><ulink url='&YOCTO_LISTS_URL;/listinfo/yocto'></ulink> -
+                General Yocto Project discussion mailing list. </para></listitem>
+            <listitem><para><ulink url='&OE_LISTS_URL;/listinfo/openembedded-core'></ulink> -
+                Discussion mailing list about OpenEmbedded-Core (the core metadata).</para></listitem>
+            <listitem><para><ulink url='&OE_LISTS_URL;/listinfo/openembedded-devel'></ulink> -
+                Discussion mailing list about OpenEmbedded.</para></listitem>
+            <listitem><para><ulink url='&OE_LISTS_URL;/listinfo/bitbake-devel'></ulink> -
+                Discussion mailing list about the BitBake build tool.</para></listitem>
+            <listitem><para><ulink url='&YOCTO_LISTS_URL;/listinfo/poky'></ulink> -
+                Discussion mailing list about Poky.</para></listitem>
+            <listitem><para><ulink url='&YOCTO_LISTS_URL;/listinfo/yocto-announce'></ulink> -
+                Mailing list to receive official Yocto Project release and milestone
+                announcements.</para></listitem>
+        </itemizedlist>
     </para>
-
-    <itemizedlist>
-        <listitem><para>
-            <ulink url='http://lists.yoctoproject.org/listinfo/yocto'></ulink> for a Yocto Discussions
-            mailing list.
-        </para></listitem>
-
-        <listitem><para>
-            <ulink url='http://lists.yoctoproject.org/listinfo/poky'></ulink> for a Poky Discussions 
-            mailing list.
-        </para></listitem>
-
-        <listitem><para>
-            <ulink url='http://lists.yoctoproject.org/listinfo/yocto-announce'></ulink> for a mailing list
-            to receive offical Yocto Project announcements for developments and milestones.
-        </para></listitem>
-    </itemizedlist>
-
 </section>
 
 <section id='resources-irc'>
     <title>Internet Relay Chat (IRC)</title>
 
     <para>
-        Two IRC channels on freenode are available for Yocto Project and Poky discussions:
-    <itemizedlist>
-        <listitem><para>
-            #yocto
-        </para></listitem>
-
-        <listitem><para>
-            #poky
-        </para></listitem>
-    </itemizedlist>
+        Two IRC channels on freenode are available for the Yocto Project and Poky discussions:
+        <itemizedlist>
+            <listitem><para><filename>#yocto</filename></para></listitem>
+            <listitem><para><filename>#poky</filename></para></listitem>
+        </itemizedlist>
     </para>
 </section>
 
 <section id='resources-links'>
     <title>Links</title>
 
-    <itemizedlist>
-        <listitem><para>
-            <ulink url='http://yoctoproject.org'>The Yocto Project website</ulink> - The home site
-            for Yocto Project.
-        </para></listitem>
-        <listitem><para>
-            <ulink url='http://pokylinux.org'>The Poky website</ulink> - The home site
-            for Poky Linux.
-        </para></listitem>
-        <listitem><para>
-            <ulink url='http://www.openedhand.com/'>OpenedHand</ulink> - The
-            original company behind Poky.
-        </para></listitem>
-        <listitem><para>
-            <ulink url='http://www.intel.com/'>Intel Corporation</ulink> - The
-            company who acquired OpenedHand in 2008.
-        </para></listitem>
-
-        <listitem><para>
-            <ulink url='http://www.openembedded.org/'>OpenEmbedded</ulink>
-            - The upstream generic embedded distribution Poky derives
-            from (and contributes to).
-        </para></listitem>
-        <listitem><para>
-            <ulink url='http://developer.berlios.de/projects/bitbake/'>Bitbake</ulink>
-            - The tool used to process Poky metadata.
-        </para></listitem>
-        <listitem><para>
-            <ulink url='http://bitbake.berlios.de/manual/'>BitBake User
-                Manual</ulink> - A comprehensive guide to the BitBake tool.
-        </para></listitem>
-        <listitem><para>
-            <ulink url='http://pimlico-project.org/'>Pimlico</ulink> - A
-            suite of lightweight Personal Information Management (PIM)
-            applications designed primarily for handheld and mobile
-            devices.
-        </para></listitem>
-        <listitem><para>
-            <ulink url='http://fabrice.bellard.free.fr/qemu/'>QEMU</ulink>
-            - An open source machine emulator and virtualizer.
-        </para></listitem>
-    </itemizedlist>
+    <para>
+        Following is a list of resources you will find helpful:
+        <itemizedlist>
+            <listitem><para><emphasis><ulink url='&YOCTO_HOME_URL;'>The Yocto Project website</ulink>:
+                </emphasis> The home site for the Yocto Project.</para></listitem>
+<!--            <listitem><para><emphasis><ulink url='&OH_HOME_URL;'>OpenedHand</ulink>:</emphasis>
+                The company where the Yocto Project build system Poky was first developed.
+                OpenedHand has since been acquired by Intel Corporation.</para></listitem> -->
+            <listitem><para><emphasis><ulink url='http://www.intel.com/'>Intel Corporation</ulink>:</emphasis>
+                The company who acquired OpenedHand in 2008 and began development on the 
+                Yocto Project.</para></listitem>
+            <listitem><para><emphasis><ulink url='&OE_HOME_URL;'>OpenEmbedded</ulink>:</emphasis>
+                The upstream, generic, embedded distribution used as the basis for the build system in the 
+                Yocto Project.
+                Poky derives from and contributes back to the OpenEmbedded project.</para></listitem>
+            <listitem><para><emphasis><ulink url='http://developer.berlios.de/projects/bitbake/'>
+                BitBake</ulink>:</emphasis> The tool used to process metadata.</para></listitem>
+            <listitem><para><emphasis>BitBake User Manual:</emphasis>
+                A comprehensive guide to the BitBake tool.
+                You can find the BitBake User Manual in the <filename>bitbake/doc/manual</filename> 
+                directory, which is found in the 
+                <ulink url='&YOCTO_DOCS_DEV_URL;#source-directory'>Source Directory</ulink>.
+                </para></listitem>
+            <listitem><para><emphasis><ulink url='http://wiki.qemu.org/Index.html'>QEMU</ulink>:
+                </emphasis> An open source machine emulator and virtualizer.</para></listitem>
+        </itemizedlist>
+    </para>
 </section>
 
 <section id='resources-contributions'>
     <title>Contributions</title>
 
     <para>
-        Contributions to Poky are very welcome. Patches should be sent to the Poky mailing list along with a Signed-off-by: line in the same style as the Linux kernel. Adding this line signifies the developer has agreed to the         Developer's Certificate of Origin 1.1:
+        The Yocto Project gladly accepts contributions.
+        You can submit changes to the project either by creating and sending pull requests, 
+        or by submitting patches through email.
+        For information on how to do both, see the
+        "<ulink url='&YOCTO_DOCS_DEV_URL;#how-to-submit-a-change'>How to Submit a Change</ulink>"
+        section in the Yocto Project Development Manual.
     </para>
-
-            <programlisting>
-        Developer's Certificate of Origin 1.1
-
-        By making a contribution to this project, I certify that:
-
-        (a) The contribution was created in whole or in part by me and I
-            have the right to submit it under the open source license
-            indicated in the file; or
-
-        (b) The contribution is based upon previous work that, to the best
-            of my knowledge, is covered under an appropriate open source
-            license and I have the right under that license to submit that
-            work with modifications, whether created in whole or in part
-            by me, under the same open source license (unless I am
-            permitted to submit under a different license), as indicated
-            in the file; or
-
-        (c) The contribution was provided directly to me by some other
-            person who certified (a), (b) or (c) and I have not modified
-            it.
-
-        (d) I understand and agree that this project and the contribution
-            are public and that a record of the contribution (including all
-            personal information I submit with it, including my sign-off) is
-            maintained indefinitely and may be redistributed consistent with
-            this project or the open source license(s) involved.
-</programlisting>
-
-    <para>
-        A Poky contributions tree (poky-contrib, git://git.yoctoproject.org/poky-contrib.git)
-        exists for people to stage contributions in, for regular contributors.
-        If people desire such access, please ask on the mailing list. Usually
-        access will be given to anyone with a proven track record of good patches.
-    </para>
-
 </section>
 
-
-</appendix>
+</chapter>
 <!-- 
 vim: expandtab tw=80 ts=4 
 -->

@@ -37,6 +37,17 @@ logger = logging.getLogger("BitBake.Parsing")
 
 class ParseError(Exception):
     """Exception raised when parsing fails"""
+    def __init__(self, msg, filename, lineno=0):
+        self.msg = msg
+        self.filename = filename
+        self.lineno = lineno
+        Exception.__init__(self, msg, filename, lineno)
+
+    def __str__(self):
+        if self.lineno:
+            return "ParseError at %s:%d: %s" % (self.filename, self.lineno, self.msg)
+        else:
+            return "ParseError in %s: %s" % (self.filename, self.msg)
 
 class SkipPackage(Exception):
     """Exception raised to skip this package"""
@@ -62,9 +73,9 @@ def update_mtime(f):
 def mark_dependency(d, f):
     if f.startswith('./'):
         f = "%s/%s" % (os.getcwd(), f[2:])
-    deps = bb.data.getVar('__depends', d) or set()
+    deps = d.getVar('__depends') or set()
     deps.update([(f, cached_mtime(f))])
-    bb.data.setVar('__depends', deps, d)
+    d.setVar('__depends', deps)
 
 def supports(fn, data):
     """Returns true if we have a handler for this file, false otherwise"""
@@ -78,7 +89,7 @@ def handle(fn, data, include = 0):
     for h in handlers:
         if h['supports'](fn, data):
             return h['handle'](fn, data, include)
-    raise ParseError("%s is not a BitBake file" % fn)
+    raise ParseError("not a BitBake file", fn)
 
 def init(fn, data):
     for h in handlers:
@@ -90,7 +101,7 @@ def init_parser(d):
 
 def resolve_file(fn, d):
     if not os.path.isabs(fn):
-        bbpath = bb.data.getVar("BBPATH", d, True)
+        bbpath = d.getVar("BBPATH", True)
         newfn = bb.utils.which(bbpath, fn)
         if not newfn:
             raise IOError("file %s not found in %s" % (fn, bbpath))
@@ -111,7 +122,7 @@ def vars_from_file(mypkg, d):
     parts = myfile[0].split('_')
     __pkgsplit_cache__[mypkg] = parts
     if len(parts) > 3:
-        raise ParseError("Unable to generate default variables from the filename: %s (too many underscores)" % mypkg)
+        raise ParseError("Unable to generate default variables from filename (too many underscores)", mypkg)
     exp = 3 - len(parts)
     tmplist = []
     while exp != 0:
@@ -119,5 +130,14 @@ def vars_from_file(mypkg, d):
         tmplist.append(None)
     parts.extend(tmplist)
     return parts
+
+def get_file_depends(d):
+    '''Return the dependent files'''
+    dep_files = []
+    depends = d.getVar('__depends', True) or set()
+    depends = depends.union(d.getVar('__base_depends', True) or set())
+    for (fn, _) in depends:
+        dep_files.append(os.path.abspath(fn))
+    return " ".join(dep_files)
 
 from bb.parse.parse_py import __version__, ConfHandler, BBHandler

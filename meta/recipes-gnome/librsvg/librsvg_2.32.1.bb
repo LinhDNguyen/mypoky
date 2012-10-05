@@ -7,13 +7,21 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=94d55d512a9ba36caa9b7df079bae19f \
                     file://rsvg.h;beginline=3;endline=24;md5=20b4113c4909bbf0d67e006778302bc6"
 
 SECTION = "x11/utils"
-DEPENDS = "gtk+ libcroco cairo libxml2 popt"
+DEPENDS = "gtk+ cairo libxml2"
+DEPENDS_virtclass-native = "cairo-native pango-native gdk-pixbuf-native"
+BBCLASSEXTEND = "native"
 
-PR = "r2"
+PR = "r10"
 
-inherit autotools pkgconfig gnome
+inherit autotools pkgconfig gnome gtk-doc
 
-EXTRA_OECONF = "--disable-mozilla-plugin --without-svgz --without-croco --disable-gnome-vfs"
+EXTRA_OECONF = "--disable-mozilla-plugin --without-svgz"
+
+PACKAGECONFIG ??= "croco"
+# When native we can manage without croco, as it's only for GTK+
+PACKAGECONFIG_virtclass-native = ""
+
+PACKAGECONFIG[croco] = "--with-croco,--without-croco,libcroco"
 
 SRC_URI += "file://doc_Makefile.patch"
 
@@ -22,20 +30,25 @@ SRC_URI[archive.sha256sum] = "91b98051f352fab8a6257688d6b2fd665b4648ed66144861f2
 
 do_configure_prepend () {
 	export GDK_PIXBUF_QUERYLOADERS="${libdir}/gtk-2.0/version/loaders"
-	echo "CLEANFILES=" > gtk-doc.make
 }
 
 PACKAGES =+ "librsvg-gtk librsvg-gtk-dbg librsvg-gtk-dev rsvg"
 FILES_${PN} = "${libdir}/*.so.*"
+FILES_${PN}-staticdev += "${libdir}/gdk-pixbuf-2.0/*.a ${libdir}/gdk-pixbuf-2.0/*/*/*.a \
+                          ${libdir}/gtk-2.0/*.a ${libdir}/gtk-2.0/*/*/*.a"
 FILES_rsvg = "${bindir}/rsvg \
 	      ${bindir}/rsvg-view \
 	      ${bindir}/rsvg-convert \
-	      ${datadir}/pixmaps/svg-viewer.svg"
-FILES_librsvg-gtk = "${libdir}/gtk-2.0/*/*/*.so"
-FILES_librsvg-gtk-dev += "${libdir}/gtk-2.0/*.*a \
-			  ${libdir}/gtk-2.0/*/loaders/*.*a \
-			  ${libdir}/gtk-2.0/*/engines/*.*a"
-FILES_librsvg-gtk-dbg += "${libdir}/gtk-2.0/.debug \
+	      ${datadir}/pixmaps/svg-viewer.svg \
+	      ${datadir}/themes"
+FILES_librsvg-gtk = "${libdir}/gtk-2.0/*/*/*.so ${libdir}/gdk-pixbuf-2.0/*/*/*.so"
+FILES_librsvg-gtk-dev += "${libdir}/gtk-2.0/*.la \
+			  ${libdir}/gtk-2.0/*/*/*.la \
+			  ${libdir}/gdk-pixbuf-2.0/*.la \
+			  ${libdir}/gdk-pixbuf-2.0/*/*/*.la"
+FILES_librsvg-gtk-dbg += "${libdir}/gdk-pixbuf-2.0/.debug \
+                          ${libdir}/gdk-pixbuf-2.0/*/*/.debug \
+                          ${libdir}/gtk-2.0/.debug \
                           ${libdir}/gtk-2.0/*/*/.debug"
 
 pkg_postinst_librsvg-gtk() {
@@ -52,3 +65,4 @@ fi
 test -x ${bindir}/gdk-pixbuf-query-loaders && gdk-pixbuf-query-loaders > ${sysconfdir}/gtk-2.0/gdk-pixbuf.loaders
 test -x ${bindir}/gtk-update-icon-cache && gtk-update-icon-cache  -q ${datadir}/icons/hicolor
 }
+PARALLEL_MAKE = ""

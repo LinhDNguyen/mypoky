@@ -1,4 +1,4 @@
-#! /bin/sh
+#!/bin/sh
 ### BEGIN INIT INFO
 # Provides:          save-rtc
 # Required-Start:
@@ -10,4 +10,4 @@
 ### END INIT INFO
 
 # Update the timestamp
-date -u +%2m%2d%2H%2M%4Y > /etc/timestamp
+date -u +%4Y%2m%2d%2H%2M > /etc/timestamp

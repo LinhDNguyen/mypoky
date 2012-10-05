@@ -1,7 +1,9 @@
 require eglibc-common.inc
+require eglibc-ld.inc
+require eglibc-testing.inc
 
-STAGINGCC = "gcc-cross-intermediate"
-STAGINGCC_virtclass-nativesdk = "gcc-crosssdk-intermediate"
+STAGINGCC = "gcc-cross-initial"
+STAGINGCC_virtclass-nativesdk = "gcc-crosssdk-initial"
 PATH_prepend = "${STAGING_BINDIR_TOOLCHAIN}.${STAGINGCC}:"
 
 TOOLCHAIN_OPTIONS = " --sysroot=${STAGING_DIR_TCBOOTSTRAP}"
@@ -20,20 +22,45 @@ siteconfig_do_siteconfig_gencache_prepend = " \
 "
 
 # nptl needs unwind support in gcc, which can't be built without glibc.
-DEPENDS = "virtual/${TARGET_PREFIX}gcc-intermediate linux-libc-headers"
-#this leads to circular deps, so lets not add it yet
-#RDEPENDS_ldd += " bash"
+DEPENDS = "virtual/${TARGET_PREFIX}gcc-initial linux-libc-headers virtual/${TARGET_PREFIX}libc-initial"
 # nptl needs libgcc but dlopens it, so our shlibs code doesn't detect this
 #RDEPENDS_${PN} += "${@['','libgcc']['nptl' in '${GLIBC_ADDONS}']}"
 PROVIDES = "virtual/libc virtual/${TARGET_PREFIX}libc-for-gcc"
 PROVIDES += "virtual/libintl virtual/libiconv"
 inherit autotools
+require eglibc-options.inc
 
 LEAD_SONAME = "libc.so"
 
+CACHED_CONFIGUREVARS += "ac_cv_path_KSH=${base_bindir}/bash \
+                       ac_cv_path_BASH_SHELL=${base_bindir}/bash \
+                       libc_cv_localedir=${localedir} \
+		       libc_cv_ssp=no \
+		       "
+
 GLIBC_EXTRA_OECONF ?= ""
+GLIBC_EXTRA_OECONF_virtclass-nativesdk = ""
 INHIBIT_DEFAULT_DEPS = "1"
 
 ARM_INSTRUCTION_SET = "arm"
 
-PACKAGES = "glibc catchsegv sln nscd ldd localedef glibc-utils glibc-dev glibc-doc glibc-locale libsegfault glibc-extra-nss glibc-thread-db glibc-pcprofile"
+# eglibc uses PARALLELMFLAGS variable to pass parallel build info so transfer
+# PARALLEL_MAKE into PARALLELMFLAGS and empty out PARALLEL_MAKE
+EGLIBCPARALLELISM := "PARALLELMFLAGS="${PARALLEL_MAKE}""
+EXTRA_OEMAKE[vardepsexclude] += "EGLIBCPARALLELISM"
+EXTRA_OEMAKE += "${EGLIBCPARALLELISM}"
+PARALLEL_MAKE = ""
+
+OE_FEATURES = "${@features_to_eglibc_settings(d)}"
+do_configure_prepend() {
+	sed -e "s#@BASH@#/bin/sh#" -i ${S}/elf/ldd.bash.in
+	echo '${OE_FEATURES}' > ${B}/option-groups.config
+}
+
+do_configure_append() {
+	oe_runmake config
+}
+
+GLIBC_ADDONS ?= "ports,nptl,libidn"
+SDK_GLIBC_ADDONS ?= "ports,nptl,libidn"
+GLIBC_ADDONS_virtclass-nativesdk = "${SDK_GLIBC_ADDONS}"

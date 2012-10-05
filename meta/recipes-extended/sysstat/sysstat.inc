@@ -3,13 +3,15 @@ DESCRIPTION = "The sysstat utilities are a collection of performance monitoring 
 HOMEPAGE = "http://sebastien.godard.pagesperso-orange.fr/"
 LICENSE = "GPLv2+"
 SECTION = "console/utils"
-
-DEPENDS = "virtual/libintl"
+INC_PR = "r1"
 
 SRC_URI = "http://pagesperso-orange.fr/sebastien.godard/sysstat-${PV}.tar.gz \
 		   file://99_sysstat"
 
-inherit autotools
+inherit autotools gettext
+
+EXTRA_OECONF += "--disable-sensors"
+EXTRA_OEMAKE += 'LFLAGS=""'
 
 do_install() {
 	autotools_do_install
@@ -22,13 +24,17 @@ do_install() {
 }
 
 pkg_postinst_${PN} () {
-        /etc/init.d/populate-volatile.sh update
+        if [ -n "$D" ]; then
+                exit 0
+        fi
+        if [ -e /etc/init.d/populate-volatile.sh ]; then
+                /etc/init.d/populate-volatile.sh update
+        fi
 }
 
 
 FILES_${PN} += "${libdir}/sa"
+FILES_${PN}-dbg += "${libdir}/sa/.debug/"
 
 TARGET_CC_ARCH += "${LDFLAGS}"
-LDFLAGS_append_linux-uclibc = " -lintl"
-LDFLAGS_append_linux-uclibceabi = " -lintl"
-LDFLAGS_append_linux-uclibcspe = " -lintl"
+LDFLAGS_append_libc-uclibc = " -lintl"

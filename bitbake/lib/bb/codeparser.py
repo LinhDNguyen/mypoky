@@ -5,10 +5,10 @@ import os.path
 import bb.utils, bb.data
 from itertools import chain
 from pysh import pyshyacc, pyshlex, sherrors
+from bb.cache import MultiProcessCache
 
 
 logger = logging.getLogger('BitBake.CodeParser')
-PARSERCACHE_VERSION = 2
 
 try:
     import cPickle as pickle
@@ -21,197 +21,176 @@ def check_indent(codestr):
     """If the code is indented, add a top level piece of code to 'remove' the indentation"""
 
     i = 0
-    while codestr[i] in ["\n", "	", " "]:
+    while codestr[i] in ["\n", "\t", " "]:
         i = i + 1
 
     if i == 0:
         return codestr
 
-    if codestr[i-1] is "	" or codestr[i-1] is " ":
+    if codestr[i-1] == "\t" or codestr[i-1] == " ":
         return "if 1:\n" + codestr
 
     return codestr
 
-pythonparsecache = {}
-shellparsecache = {}
 
-def parser_cachefile(d):
-    cachedir = (bb.data.getVar("PERSISTENT_DIR", d, True) or
-                bb.data.getVar("CACHE", d, True))
-    if cachedir in [None, '']:
-        return None
-    bb.utils.mkdirhier(cachedir)
-    cachefile = os.path.join(cachedir, "bb_codeparser.dat")
-    logger.debug(1, "Using cache in '%s' for codeparser cache", cachefile)
-    return cachefile
-
-def parser_cache_init(d):
-    global pythonparsecache
-    global shellparsecache
-
-    cachefile = parser_cachefile(d)
-    if not cachefile:
-        return
-
-    try:
-        p = pickle.Unpickler(file(cachefile, "rb"))
-        data, version = p.load()
-    except:
-        return
-
-    if version != PARSERCACHE_VERSION:
-        return
-
-    pythonparsecache = data[0]
-    shellparsecache = data[1]
-
-def parser_cache_save(d):
-    cachefile = parser_cachefile(d)
-    if not cachefile:
-        return
-
-    p = pickle.Pickler(file(cachefile, "wb"), -1)
-    p.dump([[pythonparsecache, shellparsecache], PARSERCACHE_VERSION])
-
-class PythonParser():
-    class ValueVisitor():
-        """Visitor to traverse a python abstract syntax tree and obtain
-        the variables referenced via bitbake metadata APIs, and the external
-        functions called.
-        """
-
-        getvars = ("d.getVar", "bb.data.getVar", "data.getVar")
-        expands = ("d.expand", "bb.data.expand", "data.expand")
-        execs = ("bb.build.exec_func", "bb.build.exec_task")
-
-        @classmethod
-        def _compare_name(cls, strparts, node):
-            """Given a sequence of strings representing a python name,
-            where the last component is the actual Name and the prior
-            elements are Attribute nodes, determine if the supplied node
-            matches.
-            """
-
-            if not strparts:
-                return True
-
-            current, rest = strparts[0], strparts[1:]
-            if isinstance(node, ast.Attribute):
-                if current == node.attr:
-                    return cls._compare_name(rest, node.value)
-            elif isinstance(node, ast.Name):
-                if current == node.id:
-                    return True
-            return False
-
-        @classmethod
-        def compare_name(cls, value, node):
-            """Convenience function for the _compare_node method, which
-            can accept a string (which is split by '.' for you), or an
-            iterable of strings, in which case it checks to see if any of
-            them match, similar to isinstance.
-            """
-
-            if isinstance(value, basestring):
-                return cls._compare_name(tuple(reversed(value.split("."))),
-                                         node)
-            else:
-                return any(cls.compare_name(item, node) for item in value)
-
-        def __init__(self, value):
-            self.var_references = set()
-            self.var_execs = set()
-            self.direct_func_calls = set()
-            self.var_expands = set()
-            self.value = value
-
-        @classmethod
-        def warn(cls, func, arg):
-            """Warn about calls of bitbake APIs which pass a non-literal
-            argument for the variable name, as we're not able to track such
-            a reference.
-            """
-
-            try:
-                funcstr = codegen.to_source(func)
-                argstr = codegen.to_source(arg)
-            except TypeError:
-                logger.debug(2, 'Failed to convert function and argument to source form')
-            else:
-                logger.debug(1, "Warning: in call to '%s', argument '%s' is "
-                                "not a literal", funcstr, argstr)
-
-        def visit_Call(self, node):
-            if self.compare_name(self.getvars, node.func):
-                if isinstance(node.args[0], ast.Str):
-                    self.var_references.add(node.args[0].s)
-                else:
-                    self.warn(node.func, node.args[0])
-            elif self.compare_name(self.expands, node.func):
-                if isinstance(node.args[0], ast.Str):
-                    self.warn(node.func, node.args[0])
-                    self.var_expands.update(node.args[0].s)
-                elif isinstance(node.args[0], ast.Call) and \
-                     self.compare_name(self.getvars, node.args[0].func):
-                    pass
-                else:
-                    self.warn(node.func, node.args[0])
-            elif self.compare_name(self.execs, node.func):
-                if isinstance(node.args[0], ast.Str):
-                    self.var_execs.add(node.args[0].s)
-                else:
-                    self.warn(node.func, node.args[0])
-            elif isinstance(node.func, ast.Name):
-                self.direct_func_calls.add(node.func.id)
-            elif isinstance(node.func, ast.Attribute):
-                # We must have a qualified name.  Therefore we need
-                # to walk the chain of 'Attribute' nodes to determine
-                # the qualification.
-                attr_node = node.func.value
-                identifier = node.func.attr
-                while isinstance(attr_node, ast.Attribute):
-                    identifier = attr_node.attr + "." + identifier
-                    attr_node = attr_node.value
-                if isinstance(attr_node, ast.Name):
-                    identifier = attr_node.id + "." + identifier
-                self.direct_func_calls.add(identifier)
+class CodeParserCache(MultiProcessCache):
+    cache_file_name = "bb_codeparser.dat"
+    CACHE_VERSION = 2
 
     def __init__(self):
-        #self.funcdefs = set()
+        MultiProcessCache.__init__(self)
+        self.pythoncache = self.cachedata[0]
+        self.shellcache = self.cachedata[1]
+        self.pythoncacheextras = self.cachedata_extras[0]
+        self.shellcacheextras = self.cachedata_extras[1]
+
+    def init_cache(self, d):
+        MultiProcessCache.init_cache(self, d)
+
+        # cachedata gets re-assigned in the parent
+        self.pythoncache = self.cachedata[0]
+        self.shellcache = self.cachedata[1]
+
+    def compress_keys(self, data):
+        # When the dicts are originally created, python calls intern() on the set keys
+        # which significantly improves memory usage. Sadly the pickle/unpickle process
+        # doesn't call intern() on the keys and results in the same strings being duplicated
+        # in memory. This also means pickle will save the same string multiple times in
+        # the cache file. By interning the data here, the cache file shrinks dramatically
+        # meaning faster load times and the reloaded cache files also consume much less
+        # memory. This is worth any performance hit from this loops and the use of the
+        # intern() data storage.
+        # Python 3.x may behave better in this area
+        for h in data[0]:
+            data[0][h]["refs"] = self.internSet(data[0][h]["refs"])
+            data[0][h]["execs"] = self.internSet(data[0][h]["execs"])
+        for h in data[1]:
+            data[1][h]["execs"] = self.internSet(data[1][h]["execs"])
+        return
+
+    def create_cachedata(self):
+        data = [{}, {}]
+        return data
+
+codeparsercache = CodeParserCache()
+
+def parser_cache_init(d):
+    codeparsercache.init_cache(d)
+
+def parser_cache_save(d):
+    codeparsercache.save_extras(d)
+
+def parser_cache_savemerge(d):
+    codeparsercache.save_merge(d)
+
+Logger = logging.getLoggerClass()
+class BufferedLogger(Logger):
+    def __init__(self, name, level=0, target=None):
+        Logger.__init__(self, name)
+        self.setLevel(level)
+        self.buffer = []
+        self.target = target
+
+    def handle(self, record):
+        self.buffer.append(record)
+
+    def flush(self):
+        for record in self.buffer:
+            self.target.handle(record)
+        self.buffer = []
+
+class PythonParser():
+    getvars = ("d.getVar", "bb.data.getVar", "data.getVar")
+    execfuncs = ("bb.build.exec_func", "bb.build.exec_task")
+
+    def warn(self, func, arg):
+        """Warn about calls of bitbake APIs which pass a non-literal
+        argument for the variable name, as we're not able to track such
+        a reference.
+        """
+
+        try:
+            funcstr = codegen.to_source(func)
+            argstr = codegen.to_source(arg)
+        except TypeError:
+            self.log.debug(2, 'Failed to convert function and argument to source form')
+        else:
+            self.log.debug(1, self.unhandled_message % (funcstr, argstr))
+
+    def visit_Call(self, node):
+        name = self.called_node_name(node.func)
+        if name in self.getvars:
+            if isinstance(node.args[0], ast.Str):
+                self.var_references.add(node.args[0].s)
+            else:
+                self.warn(node.func, node.args[0])
+        elif name in self.execfuncs:
+            if isinstance(node.args[0], ast.Str):
+                self.var_execs.add(node.args[0].s)
+            else:
+                self.warn(node.func, node.args[0])
+        elif name and isinstance(node.func, (ast.Name, ast.Attribute)):
+            self.execs.add(name)
+
+    def called_node_name(self, node):
+        """Given a called node, return its original string form"""
+        components = []
+        while node:
+            if isinstance(node, ast.Attribute):
+                components.append(node.attr)
+                node = node.value
+            elif isinstance(node, ast.Name):
+                components.append(node.id)
+                return '.'.join(reversed(components))
+            else:
+                break
+
+    def __init__(self, name, log):
+        self.var_references = set()
+        self.var_execs = set()
         self.execs = set()
-        #self.external_cmds = set()
         self.references = set()
+        self.log = BufferedLogger('BitBake.Data.%s' % name, logging.DEBUG, log)
+
+        self.unhandled_message = "in call of %s, argument '%s' is not a string literal"
+        self.unhandled_message = "while parsing %s, %s" % (name, self.unhandled_message)
 
     def parse_python(self, node):
-
         h = hash(str(node))
 
-        if h in pythonparsecache:
-            self.references = pythonparsecache[h]["refs"]
-            self.execs = pythonparsecache[h]["execs"]
+        if h in codeparsercache.pythoncache:
+            self.references = codeparsercache.pythoncache[h]["refs"]
+            self.execs = codeparsercache.pythoncache[h]["execs"]
             return
+
+        if h in codeparsercache.pythoncacheextras:
+            self.references = codeparsercache.pythoncacheextras[h]["refs"]
+            self.execs = codeparsercache.pythoncacheextras[h]["execs"]
+            return
+
 
         code = compile(check_indent(str(node)), "<string>", "exec",
                        ast.PyCF_ONLY_AST)
 
-        visitor = self.ValueVisitor(code)
         for n in ast.walk(code):
             if n.__class__.__name__ == "Call":
-                visitor.visit_Call(n)
+                self.visit_Call(n)
 
-        self.references.update(visitor.var_references)
-        self.references.update(visitor.var_execs)
-        self.execs = visitor.direct_func_calls
+        self.references.update(self.var_references)
+        self.references.update(self.var_execs)
 
-        pythonparsecache[h] = {}
-        pythonparsecache[h]["refs"] = self.references
-        pythonparsecache[h]["execs"] = self.execs
+        codeparsercache.pythoncacheextras[h] = {}
+        codeparsercache.pythoncacheextras[h]["refs"] = self.references
+        codeparsercache.pythoncacheextras[h]["execs"] = self.execs
 
 class ShellParser():
-    def __init__(self):
+    def __init__(self, name, log):
         self.funcdefs = set()
         self.allexecs = set()
         self.execs = set()
+        self.log = BufferedLogger('BitBake.Data.%s' % name, logging.DEBUG, log)
+        self.unhandled_template = "unable to handle non-literal command '%s'"
+        self.unhandled_template = "while parsing %s, %s" % (name, self.unhandled_template)
 
     def parse_shell(self, value):
         """Parse the supplied shell code in a string, returning the external
@@ -220,8 +199,12 @@ class ShellParser():
 
         h = hash(str(value))
 
-        if h in shellparsecache:
-            self.execs = shellparsecache[h]["execs"]
+        if h in codeparsercache.shellcache:
+            self.execs = codeparsercache.shellcache[h]["execs"]
+            return self.execs
+
+        if h in codeparsercache.shellcacheextras:
+            self.execs = codeparsercache.shellcacheextras[h]["execs"]
             return self.execs
 
         try:
@@ -233,8 +216,8 @@ class ShellParser():
             self.process_tokens(token)
         self.execs = set(cmd for cmd in self.allexecs if cmd not in self.funcdefs)
 
-        shellparsecache[h] = {}
-        shellparsecache[h]["execs"] = self.execs
+        codeparsercache.shellcacheextras[h] = {}
+        codeparsercache.shellcacheextras[h]["execs"] = self.execs
 
         return self.execs
 
@@ -326,8 +309,7 @@ class ShellParser():
 
                 cmd = word[1]
                 if cmd.startswith("$"):
-                    logger.debug(1, "Warning: execution of non-literal "
-                                    "command '%s'", cmd)
+                    self.log.debug(1, self.unhandled_template % cmd)
                 elif cmd == "eval":
                     command = " ".join(word for _, word in words[1:])
                     self.parse_shell(command)

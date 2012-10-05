@@ -2,17 +2,18 @@ DESCRIPTION = "eeePC specific ACPI scripts"
 HOMEPAGE = "http://alioth.debian.org/projects/debian-eeepc/"
 SECTION = "base"
 
-LICENSE="GPL"
+LICENSE="GPLv2"
 LIC_FILES_CHKSUM = "file://debian/copyright;md5=77ef83ab5f4af938a93edb61f7b74f2c"
 
-PV = "1.1.11+git${SRCPV}"
-PR = "r4"
+SRCREV = "9d4cdedca25b396405f8587f9c4fbf8229e041c2"
+PV = "1.1.12+git${SRCPV}"
+PR = "r0"
 
 RDEPENDS_${PN} = "pm-utils"
 
 SRC_URI = "git://git.debian.org/git/debian-eeepc/eeepc-acpi-scripts.git;protocol=git \
-	   file://remove-doc-check.patch;patch=1 \
-	   file://powerbtn.patch;patch=1 \
+	   file://remove-doc-check.patch \
+	   file://powerbtn.patch \
 	   file://policy-funcs "
 
 S = "${WORKDIR}/git"

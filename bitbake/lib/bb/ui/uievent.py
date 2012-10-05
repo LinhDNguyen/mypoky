@@ -28,13 +28,14 @@ import socket, threading, pickle
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 
 class BBUIEventQueue:
-    def __init__(self, BBServer):
+    def __init__(self, BBServer, clientinfo=("localhost, 0")):
 
         self.eventQueue = []
         self.eventQueueLock = threading.Lock()
         self.eventQueueNotify = threading.Event()
 
         self.BBServer = BBServer
+        self.clientinfo = clientinfo
 
         self.t = threading.Thread()
         self.t.setDaemon(True)
@@ -72,11 +73,11 @@ class BBUIEventQueue:
 
     def startCallbackHandler(self):
 
-        server = UIXMLRPCServer()
+        server = UIXMLRPCServer(self.clientinfo)
         self.host, self.port = server.socket.getsockname()
 
         server.register_function( self.system_quit, "event.quit" )
-        server.register_function( self.send_event, "event.send" )
+        server.register_function( self.send_event, "event.sendpickle" )
         server.socket.settimeout(1)
 
         self.EventHandle = self.BBServer.registerEventHandler(self.host, self.port)
@@ -98,7 +99,7 @@ class BBUIEventQueue:
 
 class UIXMLRPCServer (SimpleXMLRPCServer):
 
-    def __init__( self, interface = ("localhost", 0) ):
+    def __init__( self, interface ):
         self.quit = False
         SimpleXMLRPCServer.__init__( self,
                                     interface,

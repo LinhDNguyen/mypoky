@@ -4,19 +4,21 @@ HOMEPAGE = "http://www.openssl.org/"
 BUGTRACKER = "http://www.openssl.org/news/vulnerabilities.html"
 SECTION = "libs/network"
 
+# Big Jump for OpenSSL 1.0 support with meta-oe
+INC_PR = "r15"
+
 # "openssl | SSLeay" dual license
 LICENSE = "openssl"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=f9a8f968107345e0b75aa8c2ecaa7ec8"
 
-DEPENDS = "perl-native"
+DEPENDS = "perl-native-runtime"
 
 SRC_URI = "http://www.openssl.org/source/openssl-${PV}.tar.gz \
-           file://parallel-make-fix.patch \
           "
 S = "${WORKDIR}/openssl-${PV}"
 
 AR_append = " r"
-CFLAG = "${@base_conditional('SITEINFO_ENDIANESS', 'le', '-DL_ENDIAN', '-DB_ENDIAN', d)} \
+CFLAG = "${@base_conditional('SITEINFO_ENDIANNESS', 'le', '-DL_ENDIAN', '-DB_ENDIAN', d)} \
 	-DTERMIO ${FULL_OPTIMIZATION} -Wall"
 
 # Avoid binaries being marked as requiring an executable stack (which causes 
@@ -33,10 +35,16 @@ export AS = "${CC} -c"
 
 inherit pkgconfig siteinfo
 
-PACKAGES =+ "libcrypto libssl"
-FILES_libcrypto = "${libdir}/libcrypto.so.*"
+PACKAGES =+ "libcrypto libssl ${PN}-misc"
+FILES_libcrypto = "${base_libdir}/libcrypto${SOLIBS}"
 FILES_libssl = "${libdir}/libssl.so.*"
 FILES_${PN} =+ " ${libdir}/ssl/*"
+FILES_${PN}-misc = "${libdir}/ssl/misc ${libdir}/ssl/openssl.cnf"
+FILES_${PN}-dev += "${base_libdir}/libcrypto${SOLIBSDEV}"
+
+do_configure_prepend_darwin () {
+	sed -i -e '/version-script=openssl\.ld/d' Configure
+}
 
 do_configure () {
 	cd util
@@ -46,6 +54,10 @@ do_configure () {
 
 	os=${HOST_OS}
 	if [ "x$os" = "xlinux-uclibc" ]; then
+		os=linux
+	elif [ "x$os" = "xlinux-uclibceabi" ]; then
+		os=linux
+	elif [ "x$os" = "xlinux-gnueabi" ]; then
 		os=linux
 	fi
 	target="$os-${HOST_ARCH}"
@@ -65,11 +77,17 @@ do_configure () {
 	linux-i486)
 		target=debian-i386-i486
 		;;
-	linux-i586)
+	linux-i586 | linux-viac3)
 		target=debian-i386-i586
 		;;
 	linux-i686)
 		target=debian-i386-i686/cmov
+		;;
+	linux-gnux32-x86_64)
+		target=linux-x32
+		;;
+	linux-gnu64-x86_64)
+		target=linux-x86_64
 		;;
 	linux-mips)
 		target=debian-mips
@@ -80,16 +98,29 @@ do_configure () {
 	linux-powerpc)
 		target=linux-ppc
 		;;
+	linux-gnuspe-powerpc)
+		target=linux-ppc
+		;;
+	linux-powerpc64)
+		target=linux-ppc64
+		;;
 	linux-supersparc)
 		target=linux-sparcv8
 		;;
 	linux-sparc)
 		target=linux-sparcv8
 		;;
+	darwin-i386)
+		target=darwin-i386-cc
+		;;
 	esac
 	# inject machine-specific flags
 	sed -i -e "s|^\(\"$target\",\s*\"[^:]\+\):\([^:]\+\)|\1:${CFLAG}|g" Configure
-	perl ./Configure shared --prefix=${prefix} --openssldir=${libdir}/ssl $target
+        useprefix=${prefix}
+        if [ "x$useprefix" = "x" ]; then
+                useprefix=/
+        fi        
+	perl ./Configure ${EXTRA_OECONF} shared --prefix=$useprefix --openssldir=${libdir}/ssl --libdir=`basename ${libdir}` $target
 }
 
 do_compile () {
@@ -97,9 +128,23 @@ do_compile () {
 }
 
 do_install () {
-	install -m 0755 -d ${D}${libdir}/pkgconfig
-	oe_runmake INSTALL_PREFIX="${D}" install
-	chmod 644 ${D}${libdir}/pkgconfig/openssl.pc
+	oe_runmake INSTALL_PREFIX="${D}" MANDIR="${mandir}" install
+
 	oe_libinstall -so libcrypto ${D}${libdir}
 	oe_libinstall -so libssl ${D}${libdir}
+
+	# Moving libcrypto to /lib
+	if [ ! ${D}${libdir} -ef ${D}${base_libdir} ]; then
+		mkdir -p ${D}/${base_libdir}/
+		mv ${D}${libdir}/libcrypto* ${D}${base_libdir}/
+		sed -i s#libdir=\$\{exec_prefix\}\/lib#libdir=${base_libdir}# ${D}/${libdir}/pkgconfig/libcrypto.pc
+	fi
+
+	install -d ${D}${includedir}
+	cp --dereference -R include/openssl ${D}${includedir}
+	sed -i -e '1s,.*,#!${bindir}/env perl,' ${D}${libdir}/ssl/misc/CA.pl
+
 }
+
+BBCLASSEXTEND = "native nativesdk"
+

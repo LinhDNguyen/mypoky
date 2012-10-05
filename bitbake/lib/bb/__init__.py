@@ -21,15 +21,27 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-__version__ = "1.11.0"
+__version__ = "1.16.0"
 
 import sys
 if sys.version_info < (2, 6, 0):
     raise RuntimeError("Sorry, python 2.6.0 or later is required for this version of bitbake")
 
+
+class BBHandledException(Exception):
+    """
+    The big dilemma for generic bitbake code is what information to give the user
+    when an exception occurs. Any exception inheriting this base exception class
+    has already provided information to the user via some 'fired' message type such as
+    an explicitly fired event using bb.fire, or a bb.error message. If bitbake 
+    encounters an exception derived from this class, no backtrace or other information 
+    will be given to the user, its assumed the earlier event provided the relevant information.
+    """
+    pass
+
 import os
 import logging
-import traceback
+
 
 class NullHandler(logging.Handler):
     def emit(self, record):
@@ -51,15 +63,12 @@ class BBLogger(Logger):
     def verbose(self, msg, *args, **kwargs):
         return self.log(logging.INFO - 1, msg, *args, **kwargs)
 
-    def exception(self, msg, *args, **kwargs):
-        return self.critical("%s\n%s" % (msg, traceback.format_exc()), *args, **kwargs)
-
 logging.raiseExceptions = False
 logging.setLoggerClass(BBLogger)
 
 logger = logging.getLogger("BitBake")
 logger.addHandler(NullHandler())
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG - 2)
 
 # This has to be imported after the setLoggerClass, as the import of bb.msg
 # can result in construction of the various loggers.
@@ -70,15 +79,18 @@ if "BBDEBUG" in os.environ:
     if level:
         bb.msg.set_debug_level(level)
 
-if True or os.environ.get("BBFETCH2"):
-    from bb import fetch2 as fetch
-    sys.modules['bb.fetch'] = sys.modules['bb.fetch2']
+from bb import fetch2 as fetch
+sys.modules['bb.fetch'] = sys.modules['bb.fetch2']
 
 # Messaging convenience functions
 def plain(*args):
     logger.plain(''.join(args))
 
 def debug(lvl, *args):
+    if isinstance(lvl, basestring):
+        logger.warn("Passed invalid debug level '%s' to bb.debug", lvl)
+        args = (lvl,) + args
+        lvl = 1
     logger.debug(lvl, ''.join(args))
 
 def note(*args):
@@ -95,7 +107,7 @@ def fatal(*args):
     sys.exit(1)
 
 
-def deprecated(func, name = None, advice = ""):
+def deprecated(func, name=None, advice=""):
     """This is a decorator which can be used to mark functions
     as deprecated. It will result in a warning being emmitted
     when the function is used."""
@@ -109,8 +121,8 @@ def deprecated(func, name = None, advice = ""):
     def newFunc(*args, **kwargs):
         warnings.warn("Call to deprecated function %s%s." % (name,
                                                              advice),
-                      category = PendingDeprecationWarning,
-                      stacklevel = 2)
+                      category=DeprecationWarning,
+                      stacklevel=2)
         return func(*args, **kwargs)
     newFunc.__name__ = func.__name__
     newFunc.__doc__ = func.__doc__

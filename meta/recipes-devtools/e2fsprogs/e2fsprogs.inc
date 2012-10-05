@@ -4,7 +4,6 @@ fixing, configuring , and debugging ext2 filesystems."
 HOMEPAGE = "http://e2fsprogs.sourceforge.net/"
 
 LICENSE = "GPLv2 & LGPLv2 & BSD & MIT"
-LICENSE_e2fsprogs-blkid = "LGPLv2"
 LICENSE_e2fsprogs-e2fsck = "GPLv2"
 LICENSE_e2fsprogs-mke2fs = "GPLv2"
 LICENSE_e2fsprogs-fsck = "GPLv2"
@@ -18,10 +17,10 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=b48f21d765b875bd10400975d12c1ca2 \
                       file://lib/et/et_name.c;beginline=1;endline=11;md5=ead236447dac7b980dbc5b4804d8c836 \
                       file://lib/ss/ss.h;beginline=1;endline=20;md5=6e89ad47da6e75fecd2b5e0e81e1d4a6"
 SECTION = "base"
-DEPENDS = "gettext util-linux"
+DEPENDS = "util-linux"
 
 SRC_URI = "${SOURCEFORGE_MIRROR}/e2fsprogs/e2fsprogs-${PV}.tar.gz \
-           file://mkdir.patch;apply=yes"
+           file://mkdir.patch"
 
-inherit autotools
+inherit autotools gettext
 

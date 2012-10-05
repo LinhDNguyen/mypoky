@@ -1,3 +1,4 @@
+#!/bin/sh
 ### BEGIN INIT INFO
 # Provides:          mountnfs
 # Required-Start:    $local_fs $network $portmap
@@ -22,6 +23,7 @@ portmap=no
 mount_nfs=no
 mount_smb=no
 mount_ncp=no
+mount_cifs=no
 while read device mountpt fstype options
 do
 	case "$device" in
@@ -55,6 +57,10 @@ do
 	then
 		mount_ncp=yes
 	fi
+	if test "$fstype" = cifs
+	then
+		mount_cifs=yes
+	fi
 done
 
 exec 0>&1
@@ -69,12 +75,13 @@ then
 	fi
 fi
 
-if test "$mount_nfs" = yes || test "$mount_smb" = yes || test "$mount_ncp" = yes
+if test "$mount_nfs" = yes || test "$mount_smb" = yes || test "$mount_ncp" = yes || test "$mount_cifs" = yes
 then
 	echo "Mounting remote filesystems..."
 	test "$mount_nfs" = yes && mount -a -t nfs
 	test "$mount_smb" = yes && mount -a -t smbfs
 	test "$mount_ncp" = yes && mount -a -t ncpfs
+	test "$mount_cifs" = yes && mount -a -t cifs
 fi
 
 ) < /etc/fstab

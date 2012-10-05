@@ -1,28 +1,54 @@
 PACKAGES = "\
-  ${PN} ${PN}-symlinks \
+  ${PN} ${PN}-plugins ${PN}-symlinks \
   g++ g++-symlinks \
   cpp cpp-symlinks \
   g77 g77-symlinks \
   gfortran gfortran-symlinks \
   gcov gcov-symlinks \
+  ${PN}-plugin-dev \
   ${PN}-doc \
+  ${PN}-dev \
+  ${PN}-dbg \
 "
 
 FILES_${PN} = "\
-  ${bindir}/${TARGET_PREFIX}gcc \
-  ${bindir}/${TARGET_PREFIX}gccbug \
+  ${bindir}/${TARGET_PREFIX}gcc* \
   ${libexecdir}/gcc/${TARGET_SYS}/${BINV}/collect2 \
+  ${libexecdir}/gcc/${TARGET_SYS}/${BINV}/cc* \
+  ${libexecdir}/gcc/${TARGET_SYS}/${BINV}/lto* \
+  ${libexecdir}/gcc/${TARGET_SYS}/${BINV}/lib*${SOLIBS} \
+  ${libexecdir}/gcc/${TARGET_SYS}/${BINV}/liblto*${SOLIBSDEV} \
   ${gcclibdir}/${TARGET_SYS}/${BINV}/*.o \
   ${gcclibdir}/${TARGET_SYS}/${BINV}/specs \
-  ${gcclibdir}/${TARGET_SYS}/${BINV}/lib* \
+  ${gcclibdir}/${TARGET_SYS}/${BINV}/lib*${SOLIBS} \
   ${gcclibdir}/${TARGET_SYS}/${BINV}/include \
   ${gcclibdir}/${TARGET_SYS}/${BINV}/include-fixed \
+"
+INSANE_SKIP_${PN} += "dev-so"
+
+FILES_${PN}-dbg += "\
+  ${libexecdir}/gcc/${TARGET_SYS}/${BINV}/.debug/ \
+  ${libexecdir}/gcc/${TARGET_SYS}/${BINV}/plugin/.debug/ \
+"
+FILES_${PN}-dev = "\
+  ${gcclibdir}/${TARGET_SYS}/${BINV}/lib*${SOLIBSDEV} \
+  ${libexecdir}/gcc/${TARGET_SYS}/${BINV}/lib*${SOLIBSDEV} \
+"
+FILES_${PN}-plugin-dev = "\
+  ${gcclibdir}/${TARGET_SYS}/${BINV}/plugin/include/ \
+  ${libexecdir}/gcc/${TARGET_SYS}/${BINV}/plugin/gengtype \
+  ${gcclibdir}/${TARGET_SYS}/${BINV}/plugin/gtype.state \
 "
 FILES_${PN}-symlinks = "\
   ${bindir}/cc \
   ${bindir}/gcc \
   ${bindir}/gccbug \
 "
+
+FILES_${PN}-plugins = "\
+  ${gcclibdir}/${TARGET_SYS}/${BINV}/plugin \
+"
+ALLOW_EMPTY_${PN}-plugins = "1"
 
 FILES_g77 = "\
   ${bindir}/${TARGET_PREFIX}g77 \
@@ -71,6 +97,8 @@ do_install () {
 	# Cleanup some of the ${libdir}{,exec}/gcc stuff ...
 	rm -r ${D}${libdir}/gcc/${TARGET_SYS}/${BINV}/install-tools
 	rm -r ${D}${libexecdir}/gcc/${TARGET_SYS}/${BINV}/install-tools
+	rm -rf ${D}${libexecdir}/gcc/${TARGET_SYS}/${BINV}/*.la
+	rmdir ${D}${includedir}
 
 	# Hack around specs file assumptions
 	test -f ${D}${libdir}/gcc/${TARGET_SYS}/${BINV}/specs && sed -i -e '/^*cross_compile:$/ { n; s/1/0/; }' ${D}${libdir}/gcc/${TARGET_SYS}/${BINV}/specs
@@ -87,17 +115,28 @@ do_install () {
 	rm -f *gcc-?.?*
 
 	# We use libiberty from binutils
-	find -name libiberty.a ${D}${exec_prefix}/lib | xargs rm -f
-	find -name libiberty.h ${D}${exec_prefix}/lib | xargs rm -f
+	find ${D}${exec_prefix}/lib -name libiberty.a | xargs rm -f
+	find ${D}${exec_prefix}/lib -name libiberty.h | xargs rm -f
+
+	# Not sure why we end up with these but we don't want them...
+	rm -f ${TARGET_PREFIX}${TARGET_PREFIX}*
 
 	# Symlinks so we can use these trivially on the target
-	ln -sf ${TARGET_SYS}-g77 g77 || true
-	ln -sf ${TARGET_SYS}-gfortran gfortran || true
-	ln -sf ${TARGET_SYS}-g++ g++
-	ln -sf ${TARGET_SYS}-gcc gcc
-	ln -sf g77 f77 || true
-	ln -sf gfortran f95 || true
+	if [ -e ${TARGET_PREFIX}g77 ]; then
+		ln -sf ${TARGET_PREFIX}g77 g77 || true
+		ln -sf g77 f77 || true
+	fi
+	if [ -e ${TARGET_PREFIX}gfortran ]; then
+		ln -sf ${TARGET_PREFIX}gfortran gfortran || true
+		ln -sf gfortran f95 || true
+	fi
+	ln -sf ${TARGET_PREFIX}g++ g++
+	ln -sf ${TARGET_PREFIX}gcc gcc
+	ln -sf ${TARGET_PREFIX}cpp cpp
+	install -d ${D}${base_libdir}
+	ln -sf ${bindir}/${TARGET_PREFIX}cpp ${D}${base_libdir}/cpp
 	ln -sf g++ c++
 	ln -sf gcc cc
-	ln -sf ${bindir}/${TARGET_SYS}-cpp ${D}${bindir}/cpp
+
+	chown -R root:root ${D}
 }

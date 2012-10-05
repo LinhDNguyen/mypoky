@@ -122,8 +122,7 @@ def _create_server(host, port):
     return s
 
 class BitBakeServerCommands():
-    def __init__(self, server, cooker):
-        self.cooker = cooker
+    def __init__(self, server):
         self.server = server
 
     def registerEventHandler(self, host, port):
@@ -151,7 +150,7 @@ class BitBakeServerCommands():
         Trigger the server to quit
         """
         self.server.quit = True
-        print("Server (cooker) exitting")
+        print("Server (cooker) exiting")
         return
 
     def ping(self):
@@ -160,11 +159,11 @@ class BitBakeServerCommands():
         """
         return True
 
-class BitBakeServer(SimpleXMLRPCServer):
+class BitBakeXMLRPCServer(SimpleXMLRPCServer):
     # remove this when you're done with debugging
     # allow_reuse_address = True
 
-    def __init__(self, cooker, interface = ("localhost", 0)):
+    def __init__(self, interface):
         """
         Constructor
         """
@@ -174,9 +173,12 @@ class BitBakeServer(SimpleXMLRPCServer):
         self._idlefuns = {}
         self.host, self.port = self.socket.getsockname()
         #self.register_introspection_functions()
-        commands = BitBakeServerCommands(self, cooker)
-        self.autoregister_all_functions(commands, "")
+        self.commands = BitBakeServerCommands(self)
+        self.autoregister_all_functions(self.commands, "")
+
+    def addcooker(self, cooker):
         self.cooker = cooker
+        self.commands.cooker = cooker
 
     def autoregister_all_functions(self, context, prefix):
         """
@@ -240,22 +242,14 @@ class BitBakeServer(SimpleXMLRPCServer):
         return
 
 class BitbakeServerInfo():
-    def __init__(self, server):
-        self.host = server.host
-        self.port = server.port
-
-class BitBakeServerFork():
-    def __init__(self, cooker, server, serverinfo, logfile):
-        daemonize.createDaemon(server.serve_forever, logfile)
-
-class BitbakeUILauch():
-    def launch(self, serverinfo, uifunc, *args):
-        return uifunc(*args)
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
 
 class BitBakeServerConnection():
-    def __init__(self, serverinfo):
+    def __init__(self, serverinfo, clientinfo=("localhost", 0)):
         self.connection = _create_server(serverinfo.host, serverinfo.port)
-        self.events = uievent.BBUIEventQueue(self.connection)
+        self.events = uievent.BBUIEventQueue(self.connection, clientinfo)
         for event in bb.event.ui_queue:
             self.events.queue_event(event)
 
@@ -271,3 +265,31 @@ class BitBakeServerConnection():
             self.connection.terminateServer()
         except:
             pass
+
+class BitBakeServer(object):
+    def initServer(self, interface = ("localhost", 0)):
+        self.server = BitBakeXMLRPCServer(interface)
+
+    def addcooker(self, cooker):
+        self.cooker = cooker
+        self.server.addcooker(cooker)
+
+    def getServerIdleCB(self):
+        return self.server.register_idle_function
+
+    def saveConnectionDetails(self): 
+        self.serverinfo = BitbakeServerInfo(self.server.host, self.server.port)
+
+    def detach(self, cooker_logfile):
+        daemonize.createDaemon(self.server.serve_forever, cooker_logfile)
+        del self.cooker
+        del self.server
+
+    def establishConnection(self):
+        self.connection = BitBakeServerConnection(self.serverinfo)
+        return self.connection
+
+    def launchUI(self, uifunc, *args):
+        return uifunc(*args)
+
+

@@ -1,28 +1,27 @@
 DESCRIPTION = "SystemTap - script-directed dynamic tracing and performance analysis tool for Linux"
-LICENSE = "GPLv2"
-LIC_FILES_CHKSUM = "file://COPYING;md5=94d55d512a9ba36caa9b7df079bae19f"
 
-DEPENDS = "elfutils"
+require systemtap_git.inc
 
-PR = r0
-PV = "1.4+git${SRCPV}"
+DEPENDS = "elfutils sqlite3 systemtap-native"
+DEPENDS_virtclass-native = "elfutils-native sqlite3-native gettext-native"
+DEPENDS_virtclass-nativesdk = "nativesdk-elfutils nativesdk-sqlite3 nativesdk-gettext"
 
-SRC_URI = "git://sources.redhat.com/git/systemtap.git;protocol=git \
-          "
+PR = "r0"
 
-EXTRA_OECONF = "--prefix=${D} --with-libelf=${STAGING_DIR_TARGET} --without-rpm \
-	     ac_cv_file__usr_include_nss=no \
-	     ac_cv_file__usr_include_nss3=no \
-	     ac_cv_file__usr_include_nspr=no \
-	     ac_cv_file__usr_include_nspr4=no \
-	     ac_cv_file__usr_include_avahi_client=no \
-	     ac_cv_file__usr_include_avahi_common=no "
+export CC_FOR_BUILD = "${BUILD_CC}"
+export CFLAGS_FOR_BUILD = "${BUILD_CFLAGS}"
+export LDFLAGS_FOR_BUILD = "${BUILD_LDFLAGS}"
 
-SRC_URI[md5sum]    = "cb202866ed704c44a876d041f788bdee"
-SRC_URI[sha256sum] = "8ffe35caec0d937bd23fd78a3a8d94b58907cc0de0330b35e38f9f764815c459"
+EXTRA_OECONF += "--with-libelf=${STAGING_DIR_TARGET} --without-rpm \
+            --without-nss --without-avahi \
+            --disable-server --disable-grapher "
 
-COMPATIBLE_MACHINE = "(qemux86|qemux86-64|qemuppc|emenlow|crownbay|atom-pc|n450)"
+STAP_DOCS ?= "--disable-docs --disable-publican --disable-refdocs"
 
-S = "${WORKDIR}/git"
+EXTRA_OECONF += "${STAP_DOCS} "
 
-inherit autotools
+inherit autotools gettext
+
+BBCLASSEXTEND = "native nativesdk"
+
+FILES_${PN}-dbg += "${libexecdir}/systemtap/.debug"

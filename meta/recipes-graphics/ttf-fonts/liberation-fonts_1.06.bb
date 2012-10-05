@@ -6,19 +6,19 @@ HOMEPAGE = "https://fedorahosted.org/liberation-fonts/"
 BUGTRACKER = "https://bugzilla.redhat.com/"
 
 SECTION = "x11/fonts"
-PRIORITY = "optional"
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://COPYING;md5=751419260aa954499f7abaabaa882bbe"
-PACKAGE_ARCH = "all"
-RDEPENDS = "fontconfig-utils"
+RDEPENDS_${PN} = "fontconfig-utils"
 PE = "1"
-PR = "r0"
+PR = "r2"
 
 FONTREV = "0.20100721"
-SRC_URI = "https://fedorahosted.org/releases/l/i/${PN}/${PN}-${PV}.${FONTREV}.tar.gz \
+SRC_URI = "https://fedorahosted.org/releases/l/i/${BPN}/${BPN}-${PV}.${FONTREV}.tar.gz \
            file://30-liberation-aliases.conf"
 
-S = ${WORKDIR}/${PN}-${PV}.${FONTREV}
+S = "${WORKDIR}/${BPN}-${PV}.${FONTREV}"
+
+inherit allarch
 
 do_install () {
 	install -d ${D}${datadir}/fonts/ttf/
@@ -35,6 +35,9 @@ do_install () {
 
 pkg_postinst_${PN} () {
 #!/bin/sh
+if [ "x$D" != "x" ] ; then
+	exit 1
+fi
 fc-cache
 }
 

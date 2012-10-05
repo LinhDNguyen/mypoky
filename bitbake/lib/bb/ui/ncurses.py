@@ -47,7 +47,13 @@
 
 from __future__ import division
 import logging
-import os, sys, curses, itertools, time
+import os, sys, itertools, time, subprocess
+
+try:
+    import curses
+except ImportError:
+    sys.exit("FATAL: The ncurses ui could not load the required curses python module.")
+
 import bb
 import xmlrpclib
 from bb import ui
@@ -232,8 +238,12 @@ class NCursesUI:
         try:
             cmdline = server.runCommand(["getCmdLineAction"])
             if not cmdline:
+                print("Nothing to do.  Use 'bitbake world' to build everything, or run 'bitbake --help' for usage information.")
                 return
-            ret = server.runCommand(cmdline)
+            elif not cmdline['action']:
+                print(cmdline['msg'])
+                return
+            ret = server.runCommand(cmdline['action'])
             if ret != True:
                 print("Couldn't get default commandlind! %s" % ret)
                 return
@@ -279,10 +289,10 @@ class NCursesUI:
 #                if isinstance(event, bb.build.TaskFailed):
 #                    if event.logfile:
 #                        if data.getVar("BBINCLUDELOGS", d):
-#                            bb.msg.error(bb.msg.domain.Build, "log data follows (%s)" % logfile)
+#                            bb.error("log data follows (%s)" % logfile)
 #                            number_of_lines = data.getVar("BBINCLUDELOGS_LINES", d)
 #                            if number_of_lines:
-#                                os.system('tail -n%s %s' % (number_of_lines, logfile))
+#                                subprocess.call('tail -n%s %s' % (number_of_lines, logfile), shell=True)
 #                            else:
 #                                f = open(logfile, "r")
 #                                while True:
@@ -293,7 +303,7 @@ class NCursesUI:
 #                                    print '| %s' % l
 #                                f.close()
 #                        else:
-#                            bb.msg.error(bb.msg.domain.Build, "see log in %s" % logfile)
+#                            bb.error("see log in %s" % logfile)
 
                 if isinstance(event, bb.command.CommandCompleted):
                     # stop so the user can see the result of the build, but
@@ -308,6 +318,8 @@ class NCursesUI:
                 if isinstance(event, bb.cooker.CookerExit):
                     exitflag = True
 
+                if isinstance(event, bb.event.LogExecTTY):
+                    mw.appendText('WARN: ' + event.msg + '\n')
                 if helper.needUpdate:
                     activetasks, failedtasks = helper.getTasks()
                     taw.erase()

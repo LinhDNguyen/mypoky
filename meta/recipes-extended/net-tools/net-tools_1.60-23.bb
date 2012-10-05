@@ -5,10 +5,10 @@ BUGTRACKER = "http://bugs.debian.org/net-tools"
 LICENSE = "GPLv2+"
 LIC_FILES_CHKSUM = "file://COPYING;md5=8ca43cbc842c2336e835926c2166c28b \
                     file://ifconfig.c;startline=11;endline=15;md5=da4c7bb79a5d0798faa99ef869721f4a"
-PR = "r0"
+PR = "r2"
 
-SRC_URI = "ftp://ftp.debian.org/debian/pool/main/n/net-tools/net-tools_1.60.orig.tar.gz;name=tarball \
-           ftp://ftp.debian.org/debian/pool/main/n/net-tools/${PN}_${PV}.diff.gz;apply=no;name=patch \
+SRC_URI = "${DEBIAN_MIRROR}/main/n/net-tools/net-tools_1.60.orig.tar.gz;name=tarball \
+           ${DEBIAN_MIRROR}/main/n/net-tools/${BPN}_${PV}.diff.gz;apply=no;name=patch \
            file://net-tools-config.h \
            file://net-tools-config.make" 
 
@@ -31,15 +31,23 @@ PARALLEL_MAKE = ""
 # up all previously applied patches in the start
 nettools_do_patch() {
 	cd ${S}
-	patch -p1 < ${WORKDIR}/${PN}_${PV}.diff
+	quilt pop -a || true
+	if [ -d ${S}/.pc-nettools ]; then
+		mv ${S}/.pc-nettools ${S}/.pc
+		QUILT_PATCHES=${S}/debian/patches quilt pop -a
+		rm -rf ${S}/.pc ${S}/debian
+	fi
+	patch -p1 < ${WORKDIR}/${BPN}_${PV}.diff	
 	QUILT_PATCHES=${S}/debian/patches quilt push -a
-	rm -rf ${S}/patches ${S}/.pc
+	mv ${S}/.pc ${S}/.pc-nettools
 }
+
+do_unpack[cleandirs] += "${S}"
 
 # We invoke base do_patch at end, to incorporate any local patch
 python do_patch() {
-	bb.build.exec_func('nettools_do_patch', d)
-	bb.build.exec_func('patch_do_patch', d)
+    bb.build.exec_func('nettools_do_patch', d)
+    bb.build.exec_func('patch_do_patch', d)
 }
 
 do_configure() {
@@ -61,24 +69,19 @@ do_compile() {
 
 do_install() {
 	oe_runmake 'BASEDIR=${D}' install
-
-	for app in ${D}/${base_sbindir}/* ${D}/${base_bindir}/*; do
-		mv $app $app.${PN}
-	done
 }
 
-pkg_postinst_${PN} () {
-	for app in arp ifconfig ipmaddr iptunnel mii-tool nameif plipconfig rarp route slattach ; do
-		update-alternatives --install ${base_sbindir}/$app $app $app.${PN} 100
-	done
+inherit update-alternatives
 
-	for app in dnsdomainname domainname hostname netstat nisdomainname ypdomainname ; do
-		update-alternatives --install ${base_bindir}/$app $app $app.${PN} 100
-	done
-}
+base_sbindir_progs = "arp ifconfig ipmaddr iptunnel mii-tool nameif plipconfig rarp route slattach"
+base_bindir_progs  = "dnsdomainname domainname hostname netstat nisdomainname ypdomainname"
 
-pkg_prerm_${PN} () {
-	for app in arp ifconfig ipmaddr iptunnel mii-tool nameif plipconfig rarp route slattach dnsdomainname domainname hostname netstat nisdomainname ypdomainname ; do
-		update-alternatives --remove $app $app.${PN}
-	done
+ALTERNATIVE_${PN} = "${base_sbindir_progs} ${base_bindir_progs}"
+python __anonymous() {
+	for prog in d.getVar('base_sbindir_progs', True).split():
+		d.setVarFlag('ALTERNATIVE_LINK_NAME', prog, '%s/%s' % (d.getVar('base_sbindir', True), prog))
+	for prog in d.getVar('base_bindir_progs', True).split():
+		d.setVarFlag('ALTERNATIVE_LINK_NAME', prog, '%s/%s' % (d.getVar('base_bindir', True), prog))
 }
+ALTERNATIVE_PRIORITY = "100"
+

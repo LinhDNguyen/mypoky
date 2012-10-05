@@ -3,16 +3,15 @@ LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://COPYING.kbd;md5=9b2d91511d3d80d4d20ac6e6b0137fe9"
 SUMMARY = "Allows you to set-up and manipulate the Linux console."
 DESCRIPTION = "Provides tools that enable the set-up and manipulation of the linux console and console-font files."
-DEPENDS = "gettext"
-PR = "r2"
+PR = "r6"
 
 SRC_URI = "${SOURCEFORGE_MIRROR}/lct/console-tools-${PV}.tar.gz \
-           file://codepage.patch;patch=1 \
-           file://configure.patch;patch=1 \
-           file://compile.patch;patch=1 \
-           file://kbdrate.patch;patch=1 \
-           file://uclibc-fileno.patch;patch=1 \
-           file://config/*.m4"
+           file://codepage.patch \
+           file://configure.patch \
+           file://compile.patch \
+           file://kbdrate.patch \
+           file://uclibc-fileno.patch \
+           file://config"
 
 SRC_URI[md5sum] = "bf21564fc38b3af853ef724babddbacd"
 SRC_URI[sha256sum] = "eea6b441672dacd251079fc85ed322e196282e0e66c16303ec64c3a2b1c126c2"
@@ -31,24 +30,11 @@ do_compile () {
 	oe_runmake 'SUBDIRS=${SUBDIRS}'
 }
 
-inherit autotools
+inherit autotools gettext update-alternatives
 
-do_install () {
-	autotools_do_install
-	mv ${D}${bindir}/chvt ${D}${bindir}/chvt.${PN}
-	mv ${D}${bindir}/deallocvt ${D}${bindir}/deallocvt.${PN}
-	mv ${D}${bindir}/openvt ${D}${bindir}/openvt.${PN}
-}
+ALTERNATIVE_PRIORITY = "100"
 
-pkg_postinst_${PN} () {
-	update-alternatives --install ${bindir}/chvt chvt chvt.${PN} 100
-	update-alternatives --install ${bindir}/deallocvt deallocvt deallocvt.${PN} 100
-	update-alternatives --install ${bindir}/openvt openvt openvt.${PN} 100
-}
+bindir_progs = "chvt deallocvt fgconsole openvt"
+ALTERNATIVE_${PN} = "${bindir_progs}"
 
-pkg_prerm_${PN} () {
-	update-alternatives --remove chvt chvt.${PN}
-	update-alternatives --remove deallocvt deallocvt.${PN}
-	update-alternatives --remove openvt openvt.${PN}
-}
-
+RDEPENDS_${PN} = "bash"

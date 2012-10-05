@@ -1,9 +1,16 @@
-# libc
-libc_cv_ppc_machine=${libc_cv_ppc_machine=yes}
-libc_cv_mlong_double_128ibm=${libc_cv_mlong_double_128ibm=yes}
-libc_cv_mabi_ibmlongdouble=${libc_cv_mabi_ibmlongdouble=yes}
-libc_cv_mlong_double_128=${libc_cv_mlong_double_128=yes}
+# general
+ac_cv_va_val_copy=${ac_cv_va_val_copy=yes}
 
-# popt
-ac_cv_va_copy=${ac_cv_va_copy=yes}
-ac_cv___va_copy=${ac_cv___va_copy=yes}
+# startup-notification
+lf_cv_sane_realloc=yes
+
+# glib
+glib_cv_stack_grows=${glib_cv_stack_grows=no}
+glib_cv_uscore=${glib_cv_uscore=no}
+glib_cv_va_val_copy=${glib_cv_va_val_copy=yes}
+
+# lftp
+lftp_cv_va_val_copy=${lftp_cv_va_val_copy=yes}
+
+# slrn
+slrn_cv_va_val_copy=${slrn_cv_va_val_copy=yes}

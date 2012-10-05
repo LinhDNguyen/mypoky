@@ -8,9 +8,11 @@ DEPENDS     = "cwautomacros-native"
 
 inherit autotools update-alternatives
 
-PR = "r1"
+PR = "r3"
 
-SRC_URI = "http://ftp.gnu.org/gnu/which/which-${PV}.tar.gz \
+EXTRA_OECONF = "--disable-iberty"
+
+SRC_URI = "${GNU_MIRROR}/which/which-${PV}.tar.gz \
            file://remove-declaration.patch"
 
 SRC_URI[md5sum] = "95be0501a466e515422cde4af46b2744"
@@ -20,11 +22,5 @@ do_configure_prepend() {
 	sed -i -e 's%@ACLOCAL_CWFLAGS@%-I ${STAGING_DIR_NATIVE}/usr/share/cwautomacros/m4%g' ${S}/Makefile.am ${S}/tilde/Makefile.am
 }
 
-do_install() {
-	autotools_do_install
-	mv ${D}${bindir}/which ${D}${bindir}/which.${PN}
-}
-
-ALTERNATIVE_NAME = "which"
-ALTERNATIVE_PATH = "which.${PN}"
+ALTERNATIVE_${PN} = "which"
 ALTERNATIVE_PRIORITY = "100"

@@ -25,13 +25,12 @@ import errno
 import logging
 import bb
 import bb.msg
+import multiprocessing
+import fcntl
 from commands import getstatusoutput
 from contextlib import contextmanager
 
 logger = logging.getLogger("BitBake.Util")
-
-# Version comparison
-separators = ".-"
 
 # Context used in better_exec, eval
 _context = {
@@ -47,48 +46,57 @@ def explode_version(s):
     while (s != ''):
         if s[0] in string.digits:
             m = numeric_regexp.match(s)
-            r.append(int(m.group(1)))
+            r.append((0, int(m.group(1))))
             s = m.group(2)
             continue
         if s[0] in string.letters:
             m = alpha_regexp.match(s)
-            r.append(m.group(1))
+            r.append((1, m.group(1)))
             s = m.group(2)
             continue
-        r.append(s[0])
+        if s[0] == '~':
+            r.append((-1, s[0]))
+        else:
+            r.append((2, s[0]))
         s = s[1:]
     return r
+
+def split_version(s):
+    """Split a version string into its constituent parts (PE, PV, PR)"""
+    s = s.strip(" <>=")
+    e = 0
+    if s.count(':'):
+        e = int(s.split(":")[0])
+        s = s.split(":")[1]
+    r = ""
+    if s.count('-'):
+        r = s.rsplit("-", 1)[1]
+        s = s.rsplit("-", 1)[0]
+    v = s
+    return (e, v, r)
 
 def vercmp_part(a, b):
     va = explode_version(a)
     vb = explode_version(b)
-    sa = False
-    sb = False
     while True:
         if va == []:
-            ca = None
+            (oa, ca) = (0, None)
         else:
-            ca = va.pop(0)
+            (oa, ca) = va.pop(0)
         if vb == []:
-            cb = None
+            (ob, cb) = (0, None)
         else:
-            cb = vb.pop(0)
-        if ca == None and cb == None:
+            (ob, cb) = vb.pop(0)
+        if (oa, ca) == (0, None) and (ob, cb) == (0, None):
             return 0
-
-        if isinstance(ca, basestring):
-            sa = ca in separators
-        if isinstance(cb, basestring):
-            sb = cb in separators
-        if sa and not sb:
+        if oa < ob:
             return -1
-        if not sa and sb:
+        elif oa > ob:
             return 1
-
-        if ca > cb:
-            return 1
-        if ca < cb:
+        elif ca < cb:
             return -1
+        elif ca > cb:
+            return 1
 
 def vercmp(ta, tb):
     (ea, va, ra) = ta
@@ -101,130 +109,10 @@ def vercmp(ta, tb):
         r = vercmp_part(ra, rb)
     return r
 
-_package_weights_ = {"pre":-2, "p":0, "alpha":-4, "beta":-3, "rc":-1}    # dicts are unordered
-_package_ends_ = ["pre", "p", "alpha", "beta", "rc", "cvs", "bk", "HEAD" ]            # so we need ordered list
-
-def relparse(myver):
-    """Parses the last elements of a version number into a triplet, that can
-    later be compared.
-    """
-
-    number = 0
-    p1 = 0
-    p2 = 0
-    mynewver = myver.split('_')
-    if len(mynewver) == 2:
-        # an _package_weights_
-        number = float(mynewver[0])
-        match = 0
-        for x in _package_ends_:
-            elen = len(x)
-            if mynewver[1][:elen] == x:
-                match = 1
-                p1 = _package_weights_[x]
-                try:
-                    p2 = float(mynewver[1][elen:])
-                except:
-                    p2 = 0
-                break
-        if not match:
-            # normal number or number with letter at end
-            divider = len(myver)-1
-            if myver[divider:] not in "1234567890":
-                # letter at end
-                p1 = ord(myver[divider:])
-                number = float(myver[0:divider])
-            else:
-                number = float(myver)
-    else:
-        # normal number or number with letter at end
-        divider = len(myver)-1
-        if myver[divider:] not in "1234567890":
-            #letter at end
-            p1 = ord(myver[divider:])
-            number = float(myver[0:divider])
-        else:
-            number = float(myver)
-    return [number, p1, p2]
-
-__vercmp_cache__ = {}
-
-def vercmp_string(val1, val2):
-    """This takes two version strings and returns an integer to tell you whether
-    the versions are the same, val1>val2 or val2>val1.
-    """
-
-    # quick short-circuit
-    if val1 == val2:
-        return 0
-    valkey = val1 + " " + val2
-
-    # cache lookup
-    try:
-        return __vercmp_cache__[valkey]
-        try:
-            return - __vercmp_cache__[val2 + " " + val1]
-        except KeyError:
-            pass
-    except KeyError:
-        pass
-
-    # consider 1_p2 vc 1.1
-    # after expansion will become (1_p2,0) vc (1,1)
-    # then 1_p2 is compared with 1 before 0 is compared with 1
-    # to solve the bug we need to convert it to (1,0_p2)
-    # by splitting _prepart part and adding it back _after_expansion
-
-    val1_prepart = val2_prepart = ''
-    if val1.count('_'):
-        val1, val1_prepart = val1.split('_', 1)
-    if val2.count('_'):
-        val2, val2_prepart = val2.split('_', 1)
-
-    # replace '-' by '.'
-    # FIXME: Is it needed? can val1/2 contain '-'?
-
-    val1 = val1.split("-")
-    if len(val1) == 2:
-        val1[0] = val1[0] + "." + val1[1]
-    val2 = val2.split("-")
-    if len(val2) == 2:
-        val2[0] = val2[0] + "." + val2[1]
-
-    val1 = val1[0].split('.')
-    val2 = val2[0].split('.')
-
-    # add back decimal point so that .03 does not become "3" !
-    for x in xrange(1, len(val1)):
-        if val1[x][0] == '0' :
-            val1[x] = '.' + val1[x]
-    for x in xrange(1, len(val2)):
-        if val2[x][0] == '0' :
-            val2[x] = '.' + val2[x]
-
-    # extend varion numbers
-    if len(val2) < len(val1):
-        val2.extend(["0"]*(len(val1)-len(val2)))
-    elif len(val1) < len(val2):
-        val1.extend(["0"]*(len(val2)-len(val1)))
-
-    # add back _prepart tails
-    if val1_prepart:
-        val1[-1] += '_' + val1_prepart
-    if val2_prepart:
-        val2[-1] += '_' + val2_prepart
-    # The above code will extend version numbers out so they
-    # have the same number of digits.
-    for x in xrange(0, len(val1)):
-        cmp1 = relparse(val1[x])
-        cmp2 = relparse(val2[x])
-        for y in xrange(0, 3):
-            myret = cmp1[y] - cmp2[y]
-            if myret != 0:
-                __vercmp_cache__[valkey] = myret
-                return myret
-    __vercmp_cache__[valkey] = 0
-    return 0
+def vercmp_string(a, b):
+    ta = split_version(a)
+    tb = split_version(b)
+    return vercmp(ta, tb)
 
 def explode_deps(s):
     """
@@ -250,7 +138,7 @@ def explode_deps(s):
             #r[-1] += ' ' + ' '.join(j)
     return r
 
-def explode_dep_versions(s):
+def explode_dep_versions2(s):
     """
     Take an RDEPENDS style string of format:
     "DEPEND1 (optional version) DEPEND2 (optional version) ..."
@@ -259,24 +147,70 @@ def explode_dep_versions(s):
     r = {}
     l = s.replace(",", "").split()
     lastdep = None
+    lastcmp = ""
     lastver = ""
+    incmp = False
     inversion = False
     for i in l:
         if i[0] == '(':
-            inversion = True
-            lastver = i[1:] or ""
-            #j = []
-        elif inversion and i.endswith(')'):
-            inversion = False
-            lastver = lastver + " " + (i[:-1] or "")
-            r[lastdep] = lastver
-        elif not inversion:
-            r[i] = None
-            lastdep = i
-            lastver = ""
-        elif inversion:
-            lastver = lastver + " " + i
+            incmp = True
+            i = i[1:].strip()
+            if not i:
+                continue
 
+        if incmp:
+            incmp = False
+            inversion = True
+            # This list is based on behavior and supported comparisons from deb, opkg and rpm.
+            #
+            # Even though =<, <<, ==, !=, =>, and >> may not be supported, 
+            # we list each possibly valid item. 
+            # The build system is responsible for validation of what it supports.
+            if i.startswith(('<=', '=<', '<<', '==', '!=', '>=', '=>', '>>')):
+                lastcmp = i[0:2]
+                i = i[2:]
+            elif i.startswith(('<', '>', '=')):
+                lastcmp = i[0:1]
+                i = i[1:]
+            else:
+                # This is an unsupported case!
+                lastcmp = (i or "")
+                i = ""
+            i.strip()
+            if not i:
+                continue
+
+        if inversion:
+            if i.endswith(')'):
+                i = i[:-1] or ""
+                inversion = False
+                if lastver and i:
+                    lastver += " "
+            if i:
+                lastver += i
+                if lastdep not in r:
+                    r[lastdep] = []
+                r[lastdep].append(lastcmp + " " + lastver)
+            continue
+
+        #if not inversion:
+        lastdep = i
+        lastver = ""
+        lastcmp = ""
+        if not (i in r and r[i]):
+            r[lastdep] = []
+
+    return r
+
+def explode_dep_versions(s):
+    r = explode_dep_versions2(s)
+    for d in r:
+        if not r[d]:
+            r[d] = None
+            continue
+        if len(r[d]) > 1:
+            bb.warn("explode_dep_versions(): Item %s appeared in dependency string '%s' multiple times with different values.  explode_dep_versions cannot cope with this." % (d, s))
+        r[d] = r[d][0]
     return r
 
 def join_deps(deps, commasep=True):
@@ -286,7 +220,11 @@ def join_deps(deps, commasep=True):
     result = []
     for dep in deps:
         if deps[dep]:
-            result.append(dep + " (" + deps[dep] + ")")
+            if isinstance(deps[dep], list):
+                for v in deps[dep]:
+                    result.append(dep + " (" + v + ")")
+            else:
+                result.append(dep + " (" + deps[dep] + ")")
         else:
             result.append(dep)
     if commasep:
@@ -328,20 +266,23 @@ def better_compile(text, file, realfile, mode = "exec"):
             for line in body:
                 logger.error(line)
 
-        raise
+        e = bb.BBHandledException(e)
+        raise e
 
-def better_exec(code, context, text, realfile = "<code>"):
+def better_exec(code, context, text = None, realfile = "<code>"):
     """
     Similiar to better_compile, better_exec will
     print the lines that are responsible for the
     error.
     """
     import bb.parse
+    if not text:
+        text = code
     if not hasattr(code, "co_filename"):
         code = better_compile(code, realfile, realfile)
     try:
         exec(code, _context, context)
-    except Exception:
+    except Exception as e:
         (t, value, tb) = sys.exc_info()
 
         if t in [bb.parse.SkipPackage, bb.build.FuncFailed]:
@@ -366,22 +307,32 @@ def better_exec(code, context, text, realfile = "<code>"):
 
         logger.error("The code that was being executed was:")
         _print_trace(textarray, linefailed)
-        logger.error("(file: '%s', lineno: %s, function: %s)", tbextract[0][0], tbextract[0][1], tbextract[0][2])
+        logger.error("[From file: '%s', lineno: %s, function: %s]", tbextract[0][0], tbextract[0][1], tbextract[0][2])
 
         # See if this is a function we constructed and has calls back into other functions in
         # "text". If so, try and improve the context of the error by diving down the trace
         level = 0
         nexttb = tb.tb_next
-        while nexttb is not None:
+        while nexttb is not None and (level+1) < len(tbextract):
             if tbextract[level][0] == tbextract[level+1][0] and tbextract[level+1][2] == tbextract[level][0]:
                 _print_trace(textarray, tbextract[level+1][1])
-                logger.error("(file: '%s', lineno: %s, function: %s)", tbextract[level+1][0], tbextract[level+1][1], tbextract[level+1][2])
+                logger.error("[From file: '%s', lineno: %s, function: %s]", tbextract[level+1][0], tbextract[level+1][1], tbextract[level+1][2])
+            elif "d" in context and tbextract[level+1][2]:
+                d = context["d"]
+                functionname = tbextract[level+1][2]
+                text = d.getVar(functionname, True)
+                if text:
+                    _print_trace(text.split('\n'), tbextract[level+1][1])
+                    logger.error("[From file: '%s', lineno: %s, function: %s]", tbextract[level+1][0], tbextract[level+1][1], tbextract[level+1][2])
+                else:
+                    break
             else:
                  break
             nexttb = tb.tb_next
             level = level + 1
 
-        raise
+        e = bb.BBHandledException(e)
+        raise e
 
 def simple_exec(code, context):
     exec(code, _context, context)
@@ -402,7 +353,7 @@ def fileslocked(files):
     for lock in locks:
         bb.utils.unlockfile(lock)
 
-def lockfile(name, shared=False):
+def lockfile(name, shared=False, retry=True):
     """
     Use the file fn as a lock file, return when the lock has been acquired.
     Returns a variable to pass to unlockfile().
@@ -418,6 +369,8 @@ def lockfile(name, shared=False):
     op = fcntl.LOCK_EX
     if shared:
         op = fcntl.LOCK_SH
+    if not retry:
+        op = op | fcntl.LOCK_NB
 
     while True:
         # If we leave the lockfiles lying around there is no problem
@@ -441,7 +394,9 @@ def lockfile(name, shared=False):
                     return lf
             lf.close()
         except Exception:
-            continue
+            pass
+        if not retry:
+            return None
 
 def unlockfile(lf):
     """
@@ -501,7 +456,6 @@ def preserved_envvars_exported():
         'SHELL',
         'TERM',
         'USER',
-        'USERNAME',
     ]
 
 def preserved_envvars_exported_interactive():
@@ -532,8 +486,6 @@ def preserved_envvars():
         'BB_PRESERVE_ENV',
         'BB_ENV_WHITELIST',
         'BB_ENV_EXTRAWHITE',
-        'LANG',
-        '_',
     ]
     return v + preserved_envvars_exported() + preserved_envvars_exported_interactive()
 
@@ -559,20 +511,29 @@ def filter_environment(good_vars):
 
 def create_interactive_env(d):
     for k in preserved_envvars_exported_interactive():
-        os.setenv(k, bb.data.getVar(k, d, True))
+        os.setenv(k, d.getVar(k, True))
+
+def approved_variables():
+    """
+    Determine and return the list of whitelisted variables which are approved
+    to remain in the envrionment.
+    """
+    approved = []
+    if 'BB_ENV_WHITELIST' in os.environ:
+        approved = os.environ['BB_ENV_WHITELIST'].split()
+    else:
+        approved = preserved_envvars()
+    if 'BB_ENV_EXTRAWHITE' in os.environ:
+        approved.extend(os.environ['BB_ENV_EXTRAWHITE'].split())
+    return approved
 
 def clean_environment():
     """
     Clean up any spurious environment variables. This will remove any
-    variables the user hasn't chose to preserve.
+    variables the user hasn't chosen to preserve.
     """
     if 'BB_PRESERVE_ENV' not in os.environ:
-        if 'BB_ENV_WHITELIST' in os.environ:
-            good_vars = os.environ['BB_ENV_WHITELIST'].split()
-        else:
-            good_vars = preserved_envvars()
-        if 'BB_ENV_EXTRAWHITE' in os.environ:
-            good_vars.extend(os.environ['BB_ENV_EXTRAWHITE'].split())
+        good_vars = approved_variables()
         filter_environment(good_vars)
 
 def empty_environment():
@@ -589,9 +550,9 @@ def build_environment(d):
     """
     import bb.data
     for var in bb.data.keys(d):
-        export = bb.data.getVarFlag(var, "export", d)
+        export = d.getVarFlag(var, "export")
         if export:
-            os.environ[var] = bb.data.getVar(var, d, True) or ""
+            os.environ[var] = d.getVar(var, True) or ""
 
 def remove(path, recurse=False):
     """Equivalent to rm -f or rm -rf"""
@@ -822,24 +783,11 @@ def which(path, item, direction = 0):
     for p in paths:
         next = os.path.join(p, item)
         if os.path.exists(next):
+            if not os.path.isabs(next):
+                next = os.path.abspath(next)
             return next
 
     return ""
-
-def init_logger(logger, verbose, debug, debug_domains):
-    """
-    Set verbosity and debug levels in the logger
-    """
-
-    if debug:
-        bb.msg.set_debug_level(debug)
-    elif verbose:
-        bb.msg.set_verbose(True)
-    else:
-        bb.msg.set_debug_level(0)
-
-    if debug_domains:
-        bb.msg.set_debug_domains(debug_domains)
 
 def to_boolean(string, default=None):
     if not string:
@@ -852,3 +800,23 @@ def to_boolean(string, default=None):
         return False
     else:
         raise ValueError("Invalid value for to_boolean: %s" % string)
+
+def contains(variable, checkvalues, truevalue, falsevalue, d):
+    val = d.getVar(variable, True)
+    if not val:
+        return falsevalue
+    val = set(val.split())
+    if isinstance(checkvalues, basestring):
+        checkvalues = set(checkvalues.split())
+    else:
+        checkvalues = set(checkvalues)
+    if checkvalues.issubset(val): 
+        return truevalue
+    return falsevalue
+
+def cpu_count():
+    return multiprocessing.cpu_count()
+
+def nonblockingfd(fd):
+    fcntl.fcntl(fd, fcntl.F_SETFL, fcntl.fcntl(fd, fcntl.F_GETFL) | os.O_NONBLOCK)
+

@@ -2,62 +2,150 @@ SUMMARY = "The New Curses library"
 DESCRIPTION = "SVr4 and XSI-Curses compatible curses library and terminfo tools including tic, infocmp, captoinfo. Supports color, multiple highlights, forms-drawing characters, and automatic recognition of keypad and function-key sequences. Extensions include resizable windows and mouse support on both xterm and Linux console using the gpm library."
 HOMEPAGE = "http://www.gnu.org/software/ncurses/ncurses.html"
 LICENSE = "MIT"
-LIC_FILES_CHKSUM = "file://ncurses/base/version.c;beginline=1;endline=27;md5=cf3c7ab00720a1b83391f49ea9956277"
+LIC_FILES_CHKSUM = "file://ncurses/base/version.c;beginline=1;endline=27;md5=cbc180a8c44ca642e97c35452fab5f66"
 SECTION = "libs"
 DEPENDS = "ncurses-native"
 DEPENDS_virtclass-native = ""
-PACKAGES_prepend = "ncurses-tools "
-PACKAGES_append = " ncurses-terminfo"
-FILES_ncurses_append = " ${datadir}/tabset"
-RSUGGESTS_${PN} = "ncurses-terminfo"
-RPROVIDES = "libncurses5"
+INC_PR = "r11"
 
-inherit autotools
+inherit autotools binconfig multilib_header
 
-# This keeps only tput/tset in ncurses
-# clear/reset are in already busybox
-FILES_ncurses-tools = "${bindir}/tic ${bindir}/toe ${bindir}/infotocap ${bindir}/captoinfo ${bindir}/infocmp ${bindir}/clear.${PN} ${bindir}/reset.${PN} ${bindir}/tack "
-FILES_ncurses-terminfo = "${datadir}/terminfo"
-FILES_${PN} = "${bindir}/tput ${bindir}/tset ${libdir}/lib*.so.* /usr/share/tabset /etc/terminfo"
+# Upstream has useful patches at times at ftp://invisible-island.net/ncurses/
+SRC_URI = "${GNU_MIRROR}/ncurses/ncurses-${PV}.tar.gz"
 
-PARALLEL_MAKE=""
+EXTRA_AUTORECONF = "-I m4"
+CONFIG_SITE =+ "${WORKDIR}/config.cache"
 
-FILESPATH = "${FILE_DIRNAME}/local:${FILE_DIRNAME}/ncurses-${PV}-${PR}:${FILE_DIRNAME}/ncurses-${PV}:${FILE_DIRNAME}/ncurses:${FILE_DIRNAME}"
+# Whether to enable separate widec libraries; must be 'true' or 'false'
+#
+# TODO: remove this variable when widec is supported in every setup?
+ENABLE_WIDEC ?= "true"
 
-EXTRA_OECONF = "--with-shared \
-                --with-libtool \
-	        --without-profile \
+# _GNU_SOURCE is required for widec stuff and is detected automatically
+# for target objects.  But it must be set manually for native and sdk
+# builds.
+BUILD_CPPFLAGS += "-D_GNU_SOURCE"
+
+# natives don't generally look in base_libdir
+base_libdir_virtclass-native = "${libdir}"
+
+# Helper function for do_configure to allow multiple configurations
+# $1 the directory to run configure in
+# $@ the arguments to pass to configure
+ncurses_configure() {
+	mkdir -p $1
+	cd $1
+	shift
+	oe_runconf \
+	        --disable-static \
 	        --without-debug \
-	        --disable-rpath \
-	        --enable-echo \
-	        --enable-const \
 	        --without-ada \
-	        --enable-termcap \
-	        --without-cxx-binding \
-	        --with-terminfo-dirs=${sysconfdir}/terminfo:${datadir}/terminfo \
-	        --enable-overwrite \
-	        --with-build-ldflags='' \
-	        --with-build-ccflags='' "
-export BUILD_CCFLAGS = "-I${S}/ncurses -I${S}/include ${BUILD_CFLAGS}"
-export BUILD_LDFLAGS = ""
-export EXTRA_OEMAKE = '"BUILD_LDFLAGS=" "BUILD_CCFLAGS=${BUILD_CCFLAGS}"'
+	        --without-gpm \
+	        --enable-hard-tabs \
+	        --enable-xmc-glitch \
+	        --enable-colorfgbg \
+	        --with-termpath='${sysconfdir}/termcap:${datadir}/misc/termcap' \
+	        --with-terminfo-dirs='${sysconfdir}/terminfo:${datadir}/terminfo' \
+	        --with-shared \
+	        --disable-big-core \
+	        --program-prefix= \
+	        --with-ticlib \
+	        --with-termlib=tinfo \
+	        --enable-sigwinch \
+	        --enable-pc-files \
+	        --disable-rpath-hack \
+	        --with-manpage-format=normal \
+	        "$@" || return 1
+	cd ..
+}
 
-do_install() {
-	# This is necessary so that the "tic" command executed during the install can
-	# link with the correct libary in staging.
-	export LD_LIBRARY_PATH="${STAGING_LIBDIR_NATIVE}"
+# Override the function from the autotools class; ncurses requires a
+# patched autoconf213 to generate the configure script. This autoconf
+# is not available so that the shipped script will be used.
+do_configure() {
+        # check does not work with cross-compiling and is generally
+        # broken because it requires stdin to be pollable (which is
+        # not the case for /dev/null redirections)
+        export cf_cv_working_poll=yes
 
-	autotools_do_install
+	ncurses_configure "narrowc" || \
+		return 1
+	! ${ENABLE_WIDEC} || \
+		ncurses_configure "widec" "--enable-widec" "--without-progs"
+}
 
-	ln -sf curses.h ${D}${includedir}/ncurses.h
+do_compile() {
+        oe_runmake -C narrowc libs
+        oe_runmake -C narrowc/progs
 
-	# our ncurses has termcap support
-	ln -sf libncurses.so ${D}${libdir}/libtermcap.so
-	ln -sf libncurses.a ${D}${libdir}/libtermcap.a
+        ! ${ENABLE_WIDEC} || \
+            oe_runmake -C widec libs
+}
 
-	# include some basic terminfo files
-	# stolen ;) from gentoo and modified a bit
-	for x in ansi console dumb linux rxvt screen sun vt{52,100,102,200,220} xterm-color xterm-xfree86
+# set of expected differences between narrowc and widec header
+#
+# TODO: the NCURSES_CH_T difference can cause real problems :(
+_unifdef_cleanup = " \
+  -e '\!/\* \$Id: curses.wide,v!,\!/\* \$Id: curses.tail,v!d' \
+  -e '/^#define NCURSES_CH_T /d' \
+  -e '/^#include <wchar.h>/d' \
+  -e '\!^/\* .* \*/!d' \
+"
+
+do_test[depends] = "unifdef-native:do_populate_sysroot"
+do_test[dirs] = "${S}"
+do_test() {
+        ${ENABLE_WIDEC} || return 0
+
+        # make sure that the narrow and widec header are compatible
+        # and differ only in minor details.
+        unifdef -k narrowc/include/curses.h | \
+            sed ${_unifdef_cleanup} > curses-narrowc.h
+        unifdef -k widec/include/curses.h | \
+            sed ${_unifdef_cleanup} > curses-widec.h
+
+        diff curses-narrowc.h curses-widec.h
+}
+
+# Split original _install_opts to two parts.
+# One is the options to install contents, the other is the parameters \
+# when running command "make install"
+_install_opts = "\
+  install.libs install.includes install.man \
+"
+_install_cfgs = "\
+  DESTDIR='${D}' \
+  PKG_CONFIG_LIBDIR='${libdir}/pkgconfig' \
+"
+
+python do_install () {
+    bb.build.exec_func("shell_do_install", d)
+    oe.path.make_relative_symlink(d.expand("${D}${libdir}/libtinfo.so"))
+}
+
+shell_do_install() {
+        # Order of installation is important; widec installs a 'curses.h'
+        # header with more definitions and must be installed last hence.
+        # Compatibility of these headers will be checked in 'do_test()'.
+        oe_runmake -C narrowc ${_install_cfgs} ${_install_opts} \
+                install.progs
+
+        # The install.data should run after install.libs, otherwise
+        # there would be a race issue in a very critical conditon, since
+        # tic will be run by install.data, and tic needs libtinfo.so
+        # which would be regenerated by install.libs.
+        oe_runmake -C narrowc ${_install_cfgs} \
+                install.data
+
+
+        ! ${ENABLE_WIDEC} || \
+            oe_runmake -C widec ${_install_cfgs} ${_install_opts}
+
+        cd narrowc
+
+        # include some basic terminfo files
+        # stolen ;) from gentoo and modified a bit
+        for x in ansi console dumb linux rxvt screen sun vt{52,100,102,200,220} xterm-color xterm-xfree86
         do
                 local termfile="$(find "${D}${datadir}/terminfo/" -name "${x}" 2>/dev/null)"
                 local basedir="$(basename $(dirname "${termfile}"))"
@@ -70,32 +158,108 @@ do_install() {
                                 ${D}${datadir}/terminfo/${basedir}/${x}
                 fi
         done
-	# i think we can use xterm-color as default xterm
-	if [ -e ${D}${sysconfdir}/terminfo/x/xterm-color ]
-	then
-		ln -sf xterm-color ${D}${sysconfdir}/terminfo/x/xterm
-	fi
+        # i think we can use xterm-color as default xterm
+        if [ -e ${D}${sysconfdir}/terminfo/x/xterm-color ]
+        then
+                ln -sf xterm-color ${D}${sysconfdir}/terminfo/x/xterm
+        fi
 
-	if [ "${PN}" = "ncurses" ]; then
-		mv ${D}${bindir}/clear ${D}${bindir}/clear.${PN}
-		mv ${D}${bindir}/reset ${D}${bindir}/reset.${PN}
-	fi
+        rm -f ${D}${libdir}/terminfo
+
+        # create linker scripts for libcurses.so and libncurses to
+        # link against -ltinfo when needed. Some builds might break
+        # else when '-Wl,--no-copy-dt-needed-entries' has been set in
+        # linker flags.
+        for i in libncurses libncursesw; do
+                f=${D}${libdir}/$i.so
+                test -h $f || continue
+                rm -f $f
+                echo '/* GNU ld script */'  >$f
+                echo "INPUT($i.so.5 AS_NEEDED(-ltinfo))" >>$f
+        done
+
+        # Make sure that libcurses is linked so that it gets -ltinfo
+        # also, this should be addressed upstream really.
+        ln -sf libncurses.so ${D}${libdir}/libcurses.so
+
+        # create libtermcap.so linker script for backward compatibility
+        f=${D}${libdir}/libtermcap.so
+        echo '/* GNU ld script */' >$f
+        echo 'INPUT(AS_NEEDED(-ltinfo))' >>$f
+
+        if [ ! -d "${D}${base_libdir}" ]; then
+            # Setting base_libdir to libdir as is done in the -native
+            # case will skip this code
+            mkdir ${D}${base_libdir}
+            mv ${D}${libdir}/libncurses.so.* ${D}${base_libdir}
+            ! ${ENABLE_WIDEC} || \
+                mv ${D}${libdir}/libncursesw.so.* ${D}${base_libdir}
+
+            mv ${D}${libdir}/libtinfo.so.* ${D}${base_libdir}
+            rm ${D}${libdir}/libtinfo.so
+            # We'll turn this into a relative symlink after do_install returns
+            ln -sf ${D}${base_libdir}/libtinfo.so.5 ${D}${libdir}/libtinfo.so
+        fi
+
+        oe_multilib_header curses.h
 }
-		
-		
-pkg_postinst_ncurses-tools () {
-	if [ "${PN}" = "ncurses" ]; then
-		update-alternatives --install ${bindir}/clear clear clear.${PN} 100
-		update-alternatives --install ${bindir}/reset reset reset.${PN} 100
-	fi
+
+python populate_packages_prepend () {
+    libdir = d.expand("${libdir}")
+    base_libdir = d.expand("${base_libdir}")
+    pnbase = d.expand("${PN}-lib%s")
+    do_split_packages(d, libdir, '^lib(.*)\.so\..*', pnbase, 'ncurses %s library', prepend=True, extra_depends = '', allow_links=True)
+    if libdir is not base_libdir:
+        do_split_packages(d, base_libdir, '^lib(.*)\.so\..*', pnbase, 'ncurses %s library', prepend=True, extra_depends = '', allow_links=True)
 }
-				
-			
-pkg_prerm_ncurses-tools () {
-	if [ "${PN}" = "ncurses" ]; then
-		update-alternatives --remove clear clear.${PN}
-		update-alternatives --remove reset reset.${PN}
-	fi
-}
+
+
+inherit update-alternatives
+
+ALTERNATIVE_PRIORITY = "100"
+
+ALTERNATIVE_ncurses-tools = "clear reset"
 
 BBCLASSEXTEND = "native nativesdk"
+
+PACKAGES += " \
+  ${PN}-tools \
+  ${PN}-terminfo \
+  ${PN}-terminfo-base \
+"
+
+FILES_${PN} = "\
+  ${bindir}/tput \
+  ${bindir}/tset \
+  ${bindir}/ncurses5-config \
+  ${bindir}/ncursesw5-config \
+  ${datadir}/tabset \
+"
+
+# This keeps only tput/tset in ncurses
+# clear/reset are in already busybox
+FILES_${PN}-tools = "\
+  ${bindir}/tic \
+  ${bindir}/toe \
+  ${bindir}/infotocap \
+  ${bindir}/captoinfo \
+  ${bindir}/infocmp \
+  ${bindir}/clear${@['', '.${BPN\x7d']['${CLASSOVERRIDE}' == 'class-target']} \
+  ${bindir}/reset${@['', '.${BPN\x7d']['${CLASSOVERRIDE}' == 'class-target']} \
+  ${bindir}/tack \
+  ${bindir}/tabs \
+"
+
+# 'reset' is a symlink to 'tset' which is in the 'ncurses' package
+RDEPENDS_${PN}-tools = "${PN}"
+
+FILES_${PN}-terminfo = "\
+  ${datadir}/terminfo \
+"
+
+FILES_${PN}-terminfo-base = "\
+  ${sysconfdir}/terminfo \
+"
+
+RSUGGESTS_${PN}-libtinfo = "${PN}-terminfo"
+RRECOMMENDS_${PN}-libtinfo = "${PN}-terminfo-base"

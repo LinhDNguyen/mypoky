@@ -51,6 +51,9 @@ sysroot_stage_dirs() {
 		sysroot_stage_libdir $from${base_libdir} $to${base_libdir}
 	fi
 	sysroot_stage_dir $from${datadir} $to${datadir}
+	# We don't care about docs/info/manpages/locales
+	rm -rf $to${mandir}/ $to${docdir}/ $to${infodir}/ ${to}${datadir}/locale/
+	rm -rf $to${datadir}/applications/ $to${datadir}/fonts/ $to${datadir}/pixmaps/
 }
 
 sysroot_stage_all() {
@@ -58,6 +61,7 @@ sysroot_stage_all() {
 }
 
 do_populate_sysroot[dirs] = "${SYSROOT_DESTDIR}"
+do_populate_sysroot[umask] = "022"
 
 addtask populate_sysroot after do_install
 
@@ -67,10 +71,26 @@ SYSROOT_LOCK = "${STAGING_DIR}/staging.lock"
 
 # We clean out any existing sstate from the sysroot if we rerun configure
 python sysroot_cleansstate () {
-     ss = sstate_state_fromvars(d, "populate_sysroot")
-     sstate_clean(ss, d)
+    ss = sstate_state_fromvars(d, "populate_sysroot")
+    sstate_clean(ss, d)
 }
 do_configure[prefuncs] += "sysroot_cleansstate"
+
+
+BB_SETSCENE_VERIFY_FUNCTION = "sysroot_checkhashes"
+
+def sysroot_checkhashes(covered, tasknames, fnids, fns, d, invalidtasks = None):
+    problems = set()
+    configurefnids = set()
+    if not invalidtasks:
+        invalidtasks = xrange(len(tasknames))
+    for task in invalidtasks:
+        if tasknames[task] == "do_configure" and task not in covered:
+            configurefnids.add(fnids[task])
+    for task in covered:
+        if tasknames[task] == "do_populate_sysroot" and fnids[task] in configurefnids:
+            problems.add(task)
+    return problems
 
 python do_populate_sysroot () {
     #
@@ -83,24 +103,25 @@ python do_populate_sysroot () {
     #
 
     bb.build.exec_func("sysroot_stage_all", d)
-    for f in (bb.data.getVar('SYSROOT_PREPROCESS_FUNCS', d, True) or '').split():
+    for f in (d.getVar('SYSROOT_PREPROCESS_FUNCS', True) or '').split():
         bb.build.exec_func(f, d)
 }
 
 SSTATETASKS += "do_populate_sysroot"
+do_populate_sysroot[cleandirs] = "${SYSROOT_DESTDIR}"
 do_populate_sysroot[sstate-name] = "populate-sysroot"
 do_populate_sysroot[sstate-inputdirs] = "${SYSROOT_DESTDIR}"
 do_populate_sysroot[sstate-outputdirs] = "${STAGING_DIR_HOST}/"
 do_populate_sysroot[stamp-extra-info] = "${MACHINE}"
 
 python do_populate_sysroot_setscene () {
-	sstate_setscene(d)
+    sstate_setscene(d)
 }
 addtask do_populate_sysroot_setscene
 
 python () {
-    if bb.data.getVar('do_stage', d, True) is not None:
-        bb.fatal("Legacy staging found for %s as it has a do_stage function. This will need conversion to a do_install or often simply removal to work with Poky" % bb.data.getVar("FILE", d, True))
+    if d.getVar('do_stage', True) is not None:
+        bb.fatal("Legacy staging found for %s as it has a do_stage function. This will need conversion to a do_install or often simply removal to work with OE-core" % d.getVar("FILE", True))
 }
 
 

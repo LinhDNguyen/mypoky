@@ -6,37 +6,39 @@
 
 valid_archs = "alpha cris ia64 \
                i386 x86 \
-               m68knommu m68k ppc powerpc ppc64  \
-	       sparc sparc64 \
-               arm  arm26 \
+               m68knommu m68k ppc powerpc powerpc64 ppc64  \
+               sparc sparc64 \
+               arm \
                m32r mips \
-	       sh sh64 um h8300   \
-	       parisc s390  v850 \
-	       avr32 blackfin"
+               sh sh64 um h8300   \
+               parisc s390  v850 \
+               avr32 blackfin \
+               microblaze"
 
 def map_kernel_arch(a, d):
-	import re
+    import re
 
-	valid_archs = bb.data.getVar('valid_archs', d, 1).split()
+    valid_archs = d.getVar('valid_archs', True).split()
 
-	if   re.match('(i.86|athlon|x86.64)$', a):	return 'x86'
-	elif re.match('arm26$', a):		        return 'arm26'
-	elif re.match('armeb$', a):		        return 'arm'
-	elif re.match('mipsel$', a):		        return 'mips'
-	elif re.match('sh(3|4)$', a):		        return 'sh'
-	elif re.match('bfin', a):                       return 'blackfin'
-        elif a in valid_archs:			        return a
-	else:
-		bb.error("cannot map '%s' to a linux kernel architecture" % a)
+    if   re.match('(i.86|athlon|x86.64)$', a):  return 'x86'
+    elif re.match('armeb$', a):                 return 'arm'
+    elif re.match('mips(el|64|64el)$', a):      return 'mips'
+    elif re.match('p(pc|owerpc)(|64)', a):      return 'powerpc'
+    elif re.match('sh(3|4)$', a):               return 'sh'
+    elif re.match('bfin', a):                   return 'blackfin'
+    elif re.match('microblazeel', a):           return 'microblaze'
+    elif a in valid_archs:                      return a
+    else:
+        bb.error("cannot map '%s' to a linux kernel architecture" % a)
 
-export ARCH = "${@map_kernel_arch(bb.data.getVar('TARGET_ARCH', d, 1), d)}"
+export ARCH = "${@map_kernel_arch(d.getVar('TARGET_ARCH', True), d)}"
 
 def map_uboot_arch(a, d):
-	import re
+    import re
 
-	if   re.match('powerpc$', a): return 'ppc'
-	elif re.match('i.86$', a): return 'x86'
-	return a
+    if   re.match('p(pc|owerpc)(|64)', a): return 'ppc'
+    elif re.match('i.86$', a): return 'x86'
+    return a
 
-export UBOOT_ARCH = "${@map_uboot_arch(bb.data.getVar('ARCH', d, 1), d)}"
+export UBOOT_ARCH = "${@map_uboot_arch(d.getVar('ARCH', True), d)}"
 

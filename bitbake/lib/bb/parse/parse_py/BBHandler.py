@@ -68,12 +68,10 @@ def supports(fn, d):
     """Return True if fn has a supported extension"""
     return os.path.splitext(fn)[-1] in [".bb", ".bbclass", ".inc"]
 
-def inherit(files, d):
-    __inherit_cache = data.getVar('__inherit_cache', d) or []
-    fn = ""
-    lineno = 0
+def inherit(files, fn, lineno, d):
+    __inherit_cache = d.getVar('__inherit_cache') or []
+    files = d.expand(files).split()
     for file in files:
-        file = data.expand(file, d)
         if not os.path.isabs(file) and not file.endswith(".bbclass"):
             file = os.path.join('classes', '%s.bbclass' % file)
 
@@ -81,8 +79,8 @@ def inherit(files, d):
             logger.log(logging.DEBUG -1, "BB %s:%d: inheriting %s", fn, lineno, file)
             __inherit_cache.append( file )
             data.setVar('__inherit_cache', __inherit_cache, d)
-            include(fn, file, d, "inherit")
-            __inherit_cache = data.getVar('__inherit_cache', d) or []
+            include(fn, file, lineno, d, "inherit")
+            __inherit_cache = d.getVar('__inherit_cache') or []
 
 def get_statements(filename, absolute_filename, base_name):
     global cached_statements
@@ -128,13 +126,13 @@ def handle(fn, d, include):
     if ext == ".bbclass":
         __classname__ = root
         classes.append(__classname__)
-        __inherit_cache = data.getVar('__inherit_cache', d) or []
+        __inherit_cache = d.getVar('__inherit_cache') or []
         if not fn in __inherit_cache:
             __inherit_cache.append(fn)
             data.setVar('__inherit_cache', __inherit_cache, d)
 
     if include != 0:
-        oldfile = data.getVar('FILE', d)
+        oldfile = d.getVar('FILE')
     else:
         oldfile = None
 
@@ -148,7 +146,7 @@ def handle(fn, d, include):
 
     # DONE WITH PARSING... time to evaluate
     if ext != ".bbclass":
-        data.setVar('FILE', fn, d)
+        data.setVar('FILE', abs_fn, d)
 
     statements.eval(d)
 
@@ -159,11 +157,11 @@ def handle(fn, d, include):
             return ast.multi_finalize(fn, d)
 
     if oldfile:
-        bb.data.setVar("FILE", oldfile, d)
+        d.setVar("FILE", oldfile)
 
     # we have parsed the bb class now
     if ext == ".bbclass" or ext == ".inc":
-        bb.methodpool.get_parsed_dict()[base_name] = 1
+        bb.methodpool.set_parsed_module(base_name)
 
     return d
 
@@ -193,21 +191,20 @@ def feeder(lineno, s, fn, root, statements):
             if lineno == IN_PYTHON_EOF:
                 return
 
-
-    # Skip empty lines
-    if s == '':
-        return          
-
-    if s[0] == '#':
+    if s and s[0] == '#':
         if len(__residue__) != 0 and __residue__[0][0] != "#":
             bb.error("There is a comment on line %s of file %s (%s) which is in the middle of a multiline expression.\nBitbake used to ignore these but no longer does so, please fix your metadata as errors are likely as a result of this change." % (lineno, fn, s))
 
-    if s[-1] == '\\':
+    if s and s[-1] == '\\':
         __residue__.append(s[:-1])
         return
 
     s = "".join(__residue__) + s
     __residue__ = []
+
+    # Skip empty lines
+    if s == '':
+        return   
 
     # Skip comments
     if s[0] == '#':

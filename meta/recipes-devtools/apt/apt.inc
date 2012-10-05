@@ -1,10 +1,15 @@
 DESCRIPTION = "Advanced front-end for dpkg."
-LICENSE = "GPL"
+LICENSE = "GPLv2.0+"
 SECTION = "base"
 
 SRC_URI = "${DEBIAN_MIRROR}/main/a/apt/apt_${PV}.tar.gz \
            file://no-ko-translation.patch \
            file://use-host.patch \
+           file://localefixes.patch \
+           file://makerace.patch \
+           file://remove-redeclaration.patch \
+           file://truncate-filename.patch \
+           file://allocate-larger-memory.patch \
            "
 
 inherit autotools gettext

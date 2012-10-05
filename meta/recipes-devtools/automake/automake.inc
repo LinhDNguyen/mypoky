@@ -4,12 +4,15 @@ Standards. Automake requires the use of Autoconf."
 LICENSE = "GPLv2"
 HOMEPAGE = "http://www.gnu.org/software/automake/"
 SECTION = "devel"
-PR = "r1"
 
-SRC_URI = "${GNU_MIRROR}/automake/automake-${PV}.tar.bz2 "
+SRC_URI = "${GNU_MIRROR}/automake/automake-${PV}.tar.gz"
 
 inherit autotools
 
-export AUTOMAKE = "${@bb.which('automake', bb.data.getVar('PATH', d, 1))}"
+do_configure() {
+	oe_runconf
+}
+
+export AUTOMAKE = "${@bb.which('automake', d.getVar('PATH', True))}"
 
 FILES_${PN} += "${datadir}/automake* ${datadir}/aclocal*"

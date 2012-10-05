@@ -1,15 +1,9 @@
 DESCRIPTION = "An Embeddable SQL Database Engine"
 HOMEPAGE = "http://www.sqlite.org"
 SECTION = "libs"
-PRIORITY = "optional"
-DEPENDS = "readline ncurses tcl-native"
-DEPENDS_virtclass-native = "tcl-native"
+DEPENDS = "readline ncurses"
+DEPENDS_virtclass-native = ""
 LICENSE = "PD"
-
-SRC_URI = "http://www.sqlite.org/sqlite-${PV}.tar.gz \
-	   file://libtool.patch"
-
-S = "${WORKDIR}/sqlite-${PV}"
 
 inherit autotools pkgconfig
 
@@ -23,12 +17,18 @@ export config_TARGET_LINK = "${CCLD}"
 export config_TARGET_CFLAGS = "${CFLAGS}"
 export config_TARGET_LFLAGS = "${LDFLAGS}"
 
-PACKAGES = "lib${PN} lib${PN}-dev lib${PN}-doc ${PN} ${PN}-dbg"
+# pread() is in POSIX.1-2001 so any reasonable system must surely support it
+BUILD_CFLAGS += "-DUSE_PREAD"
+TARGET_CFLAGS += "-DUSE_PREAD"
+
+PACKAGES = "lib${BPN} lib${BPN}-dev lib${BPN}-doc ${PN}-dbg lib${BPN}-staticdev ${PN}"
+
 FILES_${PN} = "${bindir}/*"
-FILES_lib${PN} = "${libdir}/*.so.*"
-FILES_lib${PN}-dev = "${libdir}/*.a ${libdir}/*.la ${libdir}/*.so \
-		       ${libdir}/pkgconfig ${includedir}"
-FILES_lib${PN}-doc = "${docdir} ${mandir} ${infodir}"
-AUTO_LIBNAME_PKGS = "lib${PN}"
+FILES_lib${BPN} = "${libdir}/*.so.*"
+FILES_lib${BPN}-dev = "${libdir}/*.la ${libdir}/*.so \
+	                	   ${libdir}/pkgconfig ${includedir}"
+FILES_lib${BPN}-doc = "${docdir} ${mandir} ${infodir}"
+FILES_lib${BPN}-staticdev = "${libdir}/lib*.a"
+AUTO_LIBNAME_PKGS = "lib${BPN}"
 
 BBCLASSEXTEND = "native nativesdk"

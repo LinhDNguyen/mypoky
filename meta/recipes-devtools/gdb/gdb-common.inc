@@ -2,8 +2,17 @@ DESCRIPTION = "gdb - GNU debugger"
 HOMEPAGE = "http://www.gnu.org/software/gdb/"
 LICENSE="GPLv3+"
 SECTION = "devel"
-PRIORITY = "optional"
-DEPENDS = "ncurses readline elfutils"
+DEPENDS = "expat ncurses readline ${LTTNGUST}"
+
+LTTNGUST = "lttng-ust"
+LTTNGUST_libc-uclibc = ""
+LTTNGUST_mips = ""
+LTTNGUST_mipsel = ""
+LTTNGUST_mips64 = ""
+LTTNGUST_mips64el = ""
+LTTNGUST_sh4 = ""
+
+INC_PR = "r0"
 
 LIC_FILES_CHKSUM = "file://COPYING;md5=59530bdf33659b29e73d4adb9f9f6552 \
 		file://COPYING.LIB;md5=9f604d8a4f8e74f4f5140845a21b6674 \
@@ -12,7 +21,9 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=59530bdf33659b29e73d4adb9f9f6552 \
 inherit autotools
 
 SRC_URI = "${GNU_MIRROR}/gdb/gdb-${PV}.tar.gz \
-           file://no-werror.patch"
+          "
+SRC_URI[md5sum] = "c9f5ed81008194f8f667f131234f3ef0"
+SRC_URI[sha256sum] = "8dcf38dd04f7f031b51d0672050d6b14626302ddc24d74e486b4666335de2df3"
 
 export CC_FOR_BUILD = "${BUILD_CC}"
 export CXX_FOR_BUILD = "${BUILD_CXX}"
@@ -25,11 +36,14 @@ B = "${WORKDIR}/build-${TARGET_SYS}"
 
 EXTRA_OEMAKE = "'SUBDIRS=intl mmalloc libiberty opcodes bfd sim gdb etc utils'"
 
-EXPAT = "--without-expat"
+EXPAT = "--with-expat --with-libexpat-prefix=${STAGING_DIR_HOST}"
 
-EXTRA_OECONF = "--disable-gdbtk --disable-tui --disable-x \
+EXTRA_OECONF = "--disable-gdbtk --disable-tui --disable-x --disable-werror \
                 --with-curses --disable-multilib --with-system-readline --disable-sim \
-                ${GDBPROPREFIX} --with-libelf=${STAGING_DIR_TARGET} ${EXPAT}"
+                ${GDBPROPREFIX} ${EXPAT} \
+                ${@base_contains('DISTRO_FEATURES', 'multiarch', '--enable-64-bit-bfd', '', d)} \
+               "
+
 GDBPROPREFIX = "--program-prefix=''"
 
 do_configure () {
@@ -49,4 +63,6 @@ do_install_append() {
 
 RRECOMMENDS_gdb_append_linux = " glibc-thread-db "
 RRECOMMENDS_gdb_append_linux-gnueabi = " glibc-thread-db "
+RRECOMMENDS_gdbserver_append_linux = " glibc-thread-db "
+RRECOMMENDS_gdbserver_append_linux-gnueabi = " glibc-thread-db "
 

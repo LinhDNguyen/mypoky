@@ -1,7 +1,6 @@
 DESCRIPTION = "libcurl python bindings."
 HOMEPAGE = "http://pycurl.sourceforge.net/"
 SECTION = "devel/python"
-PRIORITY = "optional"
 LICENSE = "LGPLv2.1+ | MIT"
 LIC_FILES_CHKSUM = "file://README;endline=13;md5=fbfe545b1869617123a08c0983ef17b2 \
                     file://COPYING;md5=3579a9fd0221d49a237aaa33492f988c \
@@ -10,11 +9,11 @@ LIC_FILES_CHKSUM = "file://README;endline=13;md5=fbfe545b1869617123a08c0983ef17b
 DEPENDS = "curl python"
 RDEPENDS_${PN} = "python-core curl"
 SRCNAME = "pycurl"
-PR = "r1"
+PR = "r3"
 
 SRC_URI = "\
   http://${SRCNAME}.sourceforge.net/download/${SRCNAME}-${PV}.tar.gz;name=archive \
-  file://no-static-link.patch;patch=1 \
+  file://no-static-link.patch \
 "
 
 SRC_URI[archive.md5sum] = "919d58fe37e69fe87ce4534d8b6a1c7b"
@@ -30,3 +29,7 @@ export STAGING_INCDIR
 export STAGING_LIBDIR
 
 BBCLASSEXTEND = "native"
+
+do_install_append() {
+	rm -rf ${D}${datadir}/share
+}

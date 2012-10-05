@@ -6,12 +6,14 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=2d5025d4aa3495befef8f17206a5b0a1 \
 
 RDEPENDS_${PN} += "python-dbus"
 
-SRC_URI = "http://telepathy.freedesktop.org/releases/${PN}/${P}.tar.gz \
-           file://parallel_make.patch"
+SRC_URI = "http://telepathy.freedesktop.org/releases/${BPN}/${BPN}-${PV}.tar.gz \
+           file://parallel_make.patch \
+           file://remove_duplicate_install.patch \
+           file://telepathy-python_fix_for_automake_1.12.patch"
 
-PR = "r1"
+PR = "r6"
 
-inherit autotools
+inherit autotools pythonnative
 
 SRC_URI[md5sum] = "f7ca25ab3c88874015b7e9728f7f3017"
 SRC_URI[sha256sum] = "244c0e1bf4bbd78ae298ea659fe10bf3a73738db550156767cc2477aedf72376"
@@ -20,3 +22,10 @@ FILES_${PN} += "\
     ${libdir}/python*/site-packages/telepathy/*.py \
     ${libdir}/python*/site-packages/telepathy/*/*.py \
     "
+
+do_install_append () {
+	rm -f ${D}${libdir}/python*/site-packages/telepathy/*.pyc
+	rm -f ${D}${libdir}/python*/site-packages/telepathy/*.pyo
+	rm -f ${D}${libdir}/python*/site-packages/telepathy/*/*.pyc
+	rm -f ${D}${libdir}/python*/site-packages/telepathy/*/*.pyo
+}

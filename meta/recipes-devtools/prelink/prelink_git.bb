@@ -1,16 +1,33 @@
 SECTION = "devel"
 # Need binutils for libiberty.a
-DEPENDS = "elfutils binutils transfig-native"
+# Would need transfig-native for documentation if it wasn't disabled
+DEPENDS = "elfutils binutils"
 SUMMARY = "An ELF prelinking utility"
 DESCRIPTION = "The prelink package contains a utility which modifies ELF shared libraries \
 and executables, so that far fewer relocations need to be resolved at \
 runtime and thus programs come up faster."
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://COPYING;md5=c93c0550bd3173f4504b2cbd8991e50b"
+SRCREV = "a2d8e30942bd4bc0a5c852b9d9d12f8684c4bb8d"
 PV = "1.0+git${SRCPV}"
-PR = "r2"
+PR = "r10"
 
-SRC_URI = "git://git.pokylinux.org/prelink-cross.git;protocol=git \
+#
+# The cron script attempts to re-prelink the system daily -- on
+# systems where users are adding applications, this might be reasonable
+# but for embedded, we should be re-running prelink -a after an update.
+#
+# Default is prelinking is enabled.
+#
+SUMMARY_${PN}-cron = "Cron scripts to control automatic prelinking"
+DESCRIPTION_${PN}-cron = "Cron scripts to control automatic prelinking.  \
+See: ${sysconfdir}/cron.daily/prelink for configuration information."
+
+FILES_${PN}-cron = "${sysconfdir}/cron.daily ${sysconfdir}/default"
+
+PACKAGES =+ "${PN}-cron"
+
+SRC_URI = "git://git.yoctoproject.org/prelink-cross.git;protocol=git \
            file://prelink.conf \
            file://prelink.cron.daily \
            file://prelink.default \
@@ -26,7 +43,7 @@ inherit autotools
 BBCLASSEXTEND = "native"
 
 EXTRA_OECONF = "--disable-selinux --with-pkgversion=${PV}-${PR} \
-	--with-bugurl=http://bugzilla.pokylinux.org/"
+	--with-bugurl=http://bugzilla.yoctoproject.org/"
 
 do_configure_prepend () {
         # Disable documentation!
@@ -41,18 +58,24 @@ do_install_append () {
 	install -m 0644 ${WORKDIR}/macros.prelink ${D}${sysconfdir}/rpm/macros.prelink
 }
 
+# If we're using image-prelink, we want to skip this on the host side
+# but still do it if the package is installed on the target...
 pkg_postinst_prelink() {
 #!/bin/sh
 
 if [ "x$D" != "x" ]; then
-  exit 1
+  ${@base_contains('USER_CLASSES', 'image-prelink', 'exit 0', 'exit 1', d)}
 fi
 
 prelink -a
 }
 
-pkg_postrm_prelink() {
+pkg_prerm_prelink() {
 #!/bin/sh
+
+if [ "x$D" != "x" ]; then
+  exit 1
+fi
 
 prelink -au
 }

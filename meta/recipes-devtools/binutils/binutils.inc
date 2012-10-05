@@ -11,9 +11,9 @@ BUGTRACKER = "http://sourceware.org/bugzilla/"
 SECTION = "devel"
 LICENSE = "GPLv3"
 
-DEPENDS = "flex-native bison-native"
+DEPENDS = "flex-native bison-native zlib-native"
 
-inherit autotools gettext
+inherit autotools gettext multilib_header
 
 PACKAGES += "${PN}-symlinks"
 
@@ -24,7 +24,6 @@ FILES_${PN} = " \
 
 FILES_${PN}-dev = " \
 	${includedir} \
-	${libdir}/*.a \
 	${libdir}/*.la \
 	${libdir}/libbfd.so \
 	${libdir}/libopcodes.so"
@@ -33,23 +32,29 @@ FILES_${PN}-symlinks = " \
 	${bindir}/addr2line \
 	${bindir}/as \
 	${bindir}/c++filt \
+	${bindir}/embedspu \
 	${bindir}/gprof \
 	${bindir}/ld \
+	${bindir}/ld.bfd \
+	${bindir}/ld.gold \
 	${bindir}/nm \
 	${bindir}/objcopy \
 	${bindir}/objdump \
 	${bindir}/ranlib \
 	${bindir}/readelf \
+	${bindir}/elfedit \
 	${bindir}/size \
 	${bindir}/strip"
+
+FILES_${PN}-dbg += "${prefix}/${TARGET_SYS}/bin/.debug"
 
 B = "${S}/build.${HOST_SYS}.${TARGET_SYS}"
 
 EXTRA_OECONF = "--program-prefix=${TARGET_PREFIX} \
-                --enable-install-libbfd \
-                --enable-shared"
-
-EXTRA_OECONF_virtclass-native = "--enable-target=all --enable-64-bit-bfd --enable-install-libbfd"
+                --disable-werror \
+		--enable-plugins \
+		${@base_contains('DISTRO_FEATURES', 'ld-is-gold', '--enable-gold=default --enable-threads', '', d)} \
+                ${@base_contains('DISTRO_FEATURES', 'multiarch', '--enable-64-bit-bfd', '', d)}"
 
 # This is necessary due to a bug in the binutils Makefiles
 # EXTRA_OEMAKE = "configure-build-libiberty all"
@@ -71,10 +76,12 @@ export RANLIB_FOR_TARGET = "${TARGET_PREFIX}ranlib"
 export CC_FOR_HOST = "${CCACHE}${HOST_PREFIX}gcc ${HOST_CC_ARCH}"
 export CXX_FOR_HOST = "${CCACHE}${HOST_PREFIX}gcc ${HOST_CC_ARCH}"
 
-export CC_FOR_BUILD = "${BUILD_CC}"
+export CC_FOR_BUILD = "LD_LIBRARY_PATH= ${BUILD_CC}"
 export CPP_FOR_BUILD = "${BUILD_CPP}"
 export CFLAGS_FOR_BUILD = "${BUILD_CFLAGS}"
 
+MULTIARCH := "${@bb.utils.contains("DISTRO_FEATURES", "multiarch", "yes", "no", d)}"
+do_configure[vardeps] += "MULTIARCH"
 do_configure () {
 	(cd ${S}; gnu-configize) || die "Failed to run gnu-configize"
 	oe_runconf
@@ -109,41 +116,23 @@ do_install () {
 	cd ${D}${bindir}
 
 	# Symlinks for ease of running these on the native target
-	for p in ${TARGET_SYS}-* ; do
-		ln -sf $p `echo $p | sed -e s,${TARGET_SYS}-,,`
+	for p in ${TARGET_PREFIX}* ; do
+		ln -sf $p `echo $p | sed -e s,${TARGET_PREFIX},,`
 	done
 
-	rm ${D}${bindir}/ar ${D}${bindir}/strings
+	rm -f ${D}${bindir}/ar ${D}${bindir}/strings
+
+	oe_multilib_header bfd.h
 }
 
-do_install_virtclass-native () {
-	autotools_do_install
+inherit update-alternatives
 
-	# Install the libiberty header
-	install -d ${D}${includedir}
-	install -m 644 ${S}/include/ansidecl.h ${D}${includedir}
-	install -m 644 ${S}/include/libiberty.h ${D}${includedir}
+ALTERNATIVE_PRIORITY = "100"
 
-	# We only want libiberty, libbfd and libopcodes
-	rm -rf ${D}${bindir}
-	rm -rf ${D}${prefix}/${TARGET_SYS}
-	rm -rf ${D}${prefix}/lib/ldscripts
-	rm -rf ${D}${prefix}/share/info
-	rm -rf ${D}${prefix}/share/locale
-	rm -rf ${D}${prefix}/share/man
-	rmdir ${D}${prefix}/share || :
-	rmdir ${D}/${libdir}/gcc-lib || :
-	rmdir ${D}/${libdir}64/gcc-lib || :
-	rmdir ${D}/${libdir} || :
-	rmdir ${D}/${libdir}64 || :
-}
+ALTERNATIVE_${PN}-symlinks = "ar strings"
 
-pkg_postinst_${PN}-symlinks () {
-	update-alternatives --install ${bindir}/ar ar ${TARGET_SYS}-ar 100
-	update-alternatives --install ${bindir}/strings strings ${TARGET_SYS}-strings 100
-}
+ALTERNATIVE_LINK_NAME[ar] = "${bindir}/ar"
+ALTERNATIVE_TARGET[ar] = "${bindir}/${TARGET_PREFIX}ar"
 
-pkg_prerm_${PN}-symlinks () {
-	update-alternatives --remove ar ${TARGET_SYS}-ar
-	update-alternatives --remove strings ${TARGET_SYS}-strings
-}
+ALTERNATIVE_LINK_NAME[strings] = "${bindir}/strings"
+ALTERNATIVE_TARGET[strings] = "${bindir}/${TARGET_PREFIX}strings"

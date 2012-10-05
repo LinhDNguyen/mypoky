@@ -1,14 +1,18 @@
 DESCRIPTION = "The Python Programming Language"
 HOMEPAGE = "http://www.python.org"
-LICENSE = "PSF"
+LICENSE = "PSFv2"
 SECTION = "devel/python"
-PRIORITY = "optional"
-# bump this on every change in contrib/python/generate-manifest-2.6.py
-INC_PR = "nk1"
+# bump this on every change in contrib/python/generate-manifest-2.7.py
+INC_PR = "r0"
 
-DEFAULT_PREFERENCE = "-26"
+LIC_FILES_CHKSUM = "file://LICENSE;md5=ed3abfd1059e2d3a36a8cff3986f9bb6"
 
-PYTHON_MAJMIN = "2.6"
+SRC_URI = "http://www.python.org/ftp/python/${PV}/Python-${PV}.tar.bz2"
+ 
+SRC_URI[md5sum] = "c57477edd6d18bd9eeca2f21add73919"
+SRC_URI[sha256sum] = "726457e11cb153adc3f428aaf1901fc561a374c30e5e7da6742c0742a338663c"
+
+PYTHON_MAJMIN = "2.7"
 
 inherit autotools
 
@@ -22,7 +26,7 @@ EXTRA_OECONF = "\
   --enable-shared \
 "
 
-EXTRA_OECONF_poky-lsb = "\
+EXTRA_OECONF_linuxstdbase = "\
   --with-threads \
   --with-pymalloc \
   --with-cyclic-gc \
@@ -31,5 +35,3 @@ EXTRA_OECONF_poky-lsb = "\
   --enable-shared \
   ac_cv_sizeof_off_t=8 \
 "
-
-PARALLEL_MAKE = ""

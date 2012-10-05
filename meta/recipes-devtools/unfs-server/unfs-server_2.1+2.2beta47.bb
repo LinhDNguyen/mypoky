@@ -5,9 +5,9 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=8ca43cbc842c2336e835926c2166c28b"
 
 RDEPENDS_${PN} = "pseudo"
 RDEPENDS_${PN}_virtclass-native = "pseudo-native"
-RDEPENDS_${PN}_virtclass-nativesdk = "pseudo-nativesdk"
+RDEPENDS_${PN}_virtclass-nativesdk = "nativesdk-pseudo"
 BASEPV = "2.2beta47"
-PR = "r0"
+PR = "r1"
 
 SRC_URI = "ftp://linux.mathematik.tu-darmstadt.de/pub/linux/oldstuff/people/okir/nfs-server-${BASEPV}.tar.gz \
            file://001-2.2b47-2.2b51.patch \
@@ -32,6 +32,7 @@ SRC_URI = "ftp://linux.mathematik.tu-darmstadt.de/pub/linux/oldstuff/people/okir
            file://020-undefined-chmod-fix.patch \
            file://021-nolibwrap.patch \
            file://022-add-close-on-exec-descriptors.patch \
+           file://023-no-rpc-register.patch \
           "
 
 SRC_URI[md5sum] = "79a29fe9f79b2f3241d4915767b8c511"
@@ -61,7 +62,9 @@ do_configure_prepend () {
     # 64-bit architectures:
     rm -f *_xdr.c
 
-    mv aclocal.m4 acinclude.m4
+    if [ ! -f ${S}/acinclude.m4 ]; then
+        mv ${S}/aclocal.m4 ${S}/acinclude.m4
+    fi
 }
 
 # This recipe is intended for -native and -nativesdk builds only,
@@ -69,7 +72,7 @@ do_configure_prepend () {
 python __anonymous () {
     import re
 
-    pn = bb.data.getVar("PN", d, 1)
-    if not pn.endswith('-native') and not pn.endswith('-nativesdk'):
+    pn = d.getVar("PN", True)
+    if not pn.endswith('-native') and not pn.startswith('nativesdk-'):
         raise bb.parse.SkipPackage("unfs-server is intended for native/nativesdk builds only")
 }

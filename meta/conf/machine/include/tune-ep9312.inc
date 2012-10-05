@@ -1,8 +1,13 @@
-TARGET_CC_ARCH = "-march=ep9312 -mtune=ep9312 -mcpu=ep9312"
-# add "-mfp=maverick" for newer gcc versions > 4.0
+DEFAULTTUNE ?= "ep9312"
+ARMPKGARCH ?= "ep9312"
 
-#set arch to ep9312 for all generated packages
-PACKAGE_EXTRA_ARCHS += "armv4t ep9312"
-BASE_PACKAGE_ARCH = "ep9312"
-FEED_ARCH = "ep9312"
+require conf/machine/include/arm/arch-armv4.inc
+
+TUNEVALID[ep9312] = "Enable Intel PXA27x specific processor optimizations"
+TUNE_CCARGS += "${@bb.utils.contains("TUNE_FEATURES", "ep9312", "-march=ep9312 -mtune=ep9312", "", d)}"
+
+AVAILTUNES += "ep9312"
+TUNE_FEATURES_tune-ep9312 = "thumb ep9312"
+PACKAGE_EXTRA_ARCHS_tune-ep9312 = "${PACKAGE_EXTRA_ARCHS_tune-armv4t} ep9312"
+
 

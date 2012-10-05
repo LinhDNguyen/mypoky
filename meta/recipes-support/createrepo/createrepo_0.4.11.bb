@@ -4,10 +4,15 @@ HOMEPAGE = "http://createrepo.baseurl.org/"
 LICENSE = "GPLv2+"
 LIC_FILES_CHKSUM = "file://COPYING;md5=18810669f13b87348459e611d31ab760"
 
-PR = "r1"
+RDEPENDS_${PN}_virtclass-native += "libxml2-native rpm-native"
+
+PR = "r7"
 
 SRC_URI= "http://createrepo.baseurl.org/download/${BP}.tar.gz \
           file://fix-native-install.patch \
+          file://python-scripts-should-use-interpreter-from-env.patch \
+	  file://createrepo-rpm549.patch \
+	  file://rpm-createsolvedb.py \
          "
 
 SRC_URI[md5sum] = "3e9ccf4abcffe3f49af078c83611eda2"
@@ -17,4 +22,23 @@ BBCLASSEXTEND = "native"
 
 do_install () {
 	oe_runmake -e 'DESTDIR=${D}' install
+	install -m 0755 ${WORKDIR}/rpm-createsolvedb.py ${D}${bindir}/
+}
+
+# Wrap the python script since the native python is
+# ${bindir}/python-native/python, and the "#! /usr/bin/env python" can't
+# find it since it is not in PATH.
+do_install_append_virtclass-native () {
+	# Not all the python scripts should be wrapped since some of
+	# them are modules (be imported).
+	for i in ${D}${datadir}/createrepo/genpkgmetadata.py \
+		 ${D}${datadir}/createrepo/modifyrepo.py \
+		 ${D}${bindir}/rpm-createsolvedb.py ; do
+		create_wrapper $i ${STAGING_BINDIR_NATIVE}/python-native/python
+	done
+
+	create_wrapper ${D}/${bindir}/createrepo \
+			RPM_USRLIBRPM=${STAGING_LIBDIR_NATIVE}/rpm \
+			RPM_ETCRPM=${STAGING_ETCDIR_NATIVE}/rpm \
+			RPM_LOCALEDIRRPM=${STAGING_DATADIR_NATIVE}/locale
 }

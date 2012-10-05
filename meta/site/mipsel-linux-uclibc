@@ -1,28 +1,9 @@
-
-ac_cv_func_getpgrp_void=${ac_cv_func_getpgrp_void=yes}
+# general
 ac_cv_func_setvbuf_reversed=${ac_cv_func_setvbuf_reversed=no}
-ac_cv_func_posix_getpwuid_r=${ac_cv_func_posix_getpwuid_r=yes}
-
-# tslib, others
-ac_cv_func_malloc_0_nonnull=${ac_cv_func_malloc_0_nonnull=yes}
 
 # bash
 ac_cv_c_long_double=${ac_cv_c_long_double=no}
-bash_cv_have_mbstate_t=${bash_cv_have_mbstate_t=yes}
 bash_cv_func_sigsetjmp=${bash_cv_func_sigsetjmp=present}
-bash_cv_must_reinstall_sighandlers=${bash_cv_must_reinstall_sighandlers=no}
-bash_cv_func_strcoll_broken=${bash_cv_func_strcoll_broken=no}
-bash_cv_dup2_broken=${bash_cv_dup2_broken=no}
-bash_cv_opendir_not_robust=${bash_cv_opendir_not_robust=no}
-bash_cv_type_rlimit=${bash_cv_type_rlimit=rlim_t}
-bash_cv_getenv_redef=${bash_cv_getenv_redef=yes}
-bash_cv_ulimit_maxfds=${bash_cv_ulimit_maxfds=yes}
-bash_cv_getcwd_calls_popen=${bash_cv_getcwd_calls_popen=no}
-bash_cv_printf_a_format=${bash_cv_printf_a_format=yes}
-bash_cv_pgrp_pipe=${bash_cv_pgrp_pipe=no}
-bash_cv_job_control_missing=${bash_cv_job_control_missing=present}
-bash_cv_sys_named_pipes=${bash_cv_sys_named_pipes=present}
-bash_cv_unusable_rtsigs=${bash_cv_unusable_rtsigs=no}
 
 # openssh
 ac_cv_have_accrights_in_msghdr=${ac_cv_have_accrights_in_msghdr=no}
@@ -46,17 +27,9 @@ glib_cv_sizeof_gmutex=${glib_cv_sizeof_gmutex=24}
 glib_cv_sizeof_system_thread=${glib_cv_sizeof_system_thread=4}
 glib_cv_stack_grows=${glib_cv_stack_grows=no}
 glib_cv_uscore=${glib_cv_uscore=no}
-glib_cv_va_copy=${glib_cv_va_copy=yes}
-glib_cv_va_val_copy=${glib_cv_va_val_copy=yes}
 
 # libpcap
 ac_cv_linux_vers=${ac_cv_linux_vers=2}
-ac_cv_func_getaddrinfo=${ac_cv_func_getaddrinfo=yes}
-
-# slrn
-slrn_cv___va_copy=${slrn_cv___va_copy=yes}
-slrn_cv_va_copy=${slrn_cv_va_copy=yes}
-slrn_cv_va_val_copy=${slrn_cv_va_val_copy=yes}
 
 # startup-notification
 lf_cv_sane_realloc=${lf_cv_sane_realloc=yes}
@@ -65,7 +38,6 @@ lf_cv_sane_realloc=${lf_cv_sane_realloc=yes}
 libIDL_cv_long_long_format=${libIDL_cv_long_long_format=ll}
 
 # ncftp
-ac_cv_func_setpgrp_void=${ac_cv_func_setpgrp_void=yes}
 wi_cv_struct_timeval_tv_sec=${wi_cv_struct_timeval_tv_sec=long}
 wi_cv_struct_timeval_tv_usec=${wi_cv_struct_timeval_tv_usec=long}
 wi_cv_unix_domain_sockets=${wi_cv_unix_domain_sockets=yes}
@@ -93,10 +65,7 @@ samba_cv_HAVE_EXPLICIT_LARGEFILE_SUPPORT=${samba_cv_HAVE_EXPLICIT_LARGEFILE_SUPP
 samba_cv_HAVE_FCNTL_LOCK=${samba_cv_HAVE_FCNTL_LOCK=yes}
 samba_cv_HAVE_FTRUNCATE_EXTEND=${samba_cv_HAVE_FTRUNCATE_EXTEND=yes}
 samba_cv_HAVE_GETTIMEOFDAY_TZ=${samba_cv_HAVE_GETTIMEOFDAY_TZ=yes}
-samba_cv_HAVE_IFACE_AIX=${samba_cv_HAVE_IFACE_AIX=no}
-samba_cv_HAVE_IFACE_IFCONF=${samba_cv_HAVE_IFACE_IFCONF=yes}
 samba_cv_HAVE_INO64_T=${samba_cv_HAVE_INO64_T=no}
-samba_cv_HAVE_IRIX_SPECIFIC_CAPABILITIES=${samba_cv_HAVE_IRIX_SPECIFIC_CAPABILITIES=no}
 samba_cv_HAVE_KERNEL_CHANGE_NOTIFY=${samba_cv_HAVE_KERNEL_CHANGE_NOTIFY=yes}
 samba_cv_HAVE_KERNEL_OPLOCKS_LINUX=${samba_cv_HAVE_KERNEL_OPLOCKS_LINUX=yes}
 samba_cv_HAVE_KERNEL_SHARE_MODES=${samba_cv_HAVE_KERNEL_SHARE_MODES=yes}
@@ -129,6 +98,3 @@ samba_cv_sysquotas_file=${samba_cv_sysquotas_file=lib/sysquotas_4A.c}
 # This cached value needs a local patch to pick it up, upstream 3.0.14a
 # doesn't cache it.
 samba_cv_LINUX_LFS_SUPPORT=${samba_cv_LINUX_LFS_SUPPORT=yes}
-
-# rp-pppoe
-rpppoe_cv_pack_bitfields=${rpppoe_cv_pack_bitfields=rev}

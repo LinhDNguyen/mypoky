@@ -5,21 +5,24 @@ BUGTRACKER = "https://fedorahosted.org/augeas/report/1"
 LICENSE = "LGPLv2.1+"
 LIC_FILES_CHKSUM = "file://COPYING;md5=bbb461211a33b134d42ed5ee802b37ff"
 
-SRC_URI = "http://augeas.net/download/${BP}.tar.gz"
+SRC_URI = "http://augeas.net/download/${BP}.tar.gz \
+           file://0001-Add-missing-argument-to-escape.patch \
+          "
 
-DEPENDS = "readline"
+DEPENDS = "readline libxml2"
 
 inherit autotools
 
-PACKAGES =+ "${PN}-lenses lib${PN} lib${PN}-dev lib${PN}-dbg"
+PACKAGES =+ "${PN}-lenses lib${BPN} lib${BPN}-dev lib${BPN}-staticdev lib${BPN}-dbg"
 
 FILES_${PN}-lenses = "${datadir}/augeas/lenses"
-FILES_lib${PN} = "${libdir}/*.so.*"
-FILES_lib${PN}-dev = "${libdir}/*.so ${libdir}/*.a ${libdir}/*.la ${includedir} ${libdir}/pkgconfig"
-FILES_lib${PN}-dbg = "${libdir}/.debug"
+FILES_lib${BPN} = "${libdir}/lib*${SOLIBS}"
+FILES_lib${BPN}-dev = "${libdir}/lib*${SOLIBSDEV} ${libdir}/*.la ${includedir} ${libdir}/pkgconfig"
+FILES_lib${BPN}-staticdev = "${libdir}/*.a"
+FILES_lib${BPN}-dbg = "${libdir}/.debug"
 
-RDEPENDS_lib${PN} += "${PN}-lenses"
-RRECOMMENDS_lib${PN} += "${PN}"
+RDEPENDS_lib${BPN} += "${PN}-lenses"
+RRECOMMENDS_lib${BPN} += "${PN}"
 
 LEAD_SONAME = "libaugeas.so"
 

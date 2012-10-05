@@ -5,15 +5,17 @@ the protocol, improved threading support, and extensibility."
 HOMEPAGE = "http://xcb.freedesktop.org"
 BUGTRACKER = "https://bugs.freedesktop.org/enter_bug.cgi?product=XCB"
 
+BBCLASSEXTEND = "native nativesdk"
+
 SECTION = "x11/libs"
 LICENSE = "MIT-X"
 
 PARALLEL_MAKE = ""
-DEPENDS = "xcb-proto xproto libxau libxslt-native xcb-proto-native"
+DEPENDS = "xcb-proto xproto libxau libxslt-native xcb-proto-native libpthread-stubs"
 # DEPENDS += "xsltproc-native gperf-native"
 
 SRC_URI = "http://xcb.freedesktop.org/dist/libxcb-${PV}.tar.bz2"
-#           file://xcbincludedir.patch;patch=1"
+#           file://xcbincludedir.patch"
 
 PACKAGES =+ "libxcb-composite libxcb-damage libxcb-dpms libxcb-glx \
              libxcb-randr libxcb-record libxcb-render libxcb-res \
@@ -47,12 +49,14 @@ FILES_libxcb-xtest = "${libdir}/libxcb-xtest.so.*"
 FILES_libxcb-xv = "${libdir}/libxcb-xv.so.*"
 FILES_libxcb-xvmc = "${libdir}/libxcb-xvmc.so.*"
 
-inherit autotools pkgconfig
+inherit autotools pkgconfig pythonnative
 
 # XCBPROTO_XCBINCLUDEDIR is setup based on `pkg-config --variable=xcbincludedir xcb-proto`
 # but the xcbincludedir variable doesn't point into the staging area, so it needs some
 # tweeking here:
 do_configure_prepend () {
     sed -i "s|XCBPROTO_XCBINCLUDEDIR=|XCBPROTO_XCBINCLUDEDIR=${STAGING_DIR_HOST}/|" \
+        ${S}/configure.ac
+    sed -i "s|XCBPROTO_XCBPYTHONDIR=|XCBPROTO_XCBPYTHONDIR=${STAGING_DIR_HOST}/|" \
         ${S}/configure.ac
 }

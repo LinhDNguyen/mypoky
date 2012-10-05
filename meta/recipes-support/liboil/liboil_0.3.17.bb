@@ -10,10 +10,14 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=ad80780d9c5205d63481a0184e199a15 \
                     file://testsuite/trans.c;endline=29;md5=380ecd43121fe3dcc0d8d7e5984f283d"
 
 DEPENDS = "glib-2.0"
-PR = "r2"
+PR = "r5"
 
-SRC_URI = "http://liboil.freedesktop.org/download/${P}.tar.gz \
-           file://no-tests.patch;patch=1"
+SRC_URI = "http://liboil.freedesktop.org/download/${BPN}-${PV}.tar.gz \
+           file://no-tests.patch \
+           file://fix-unaligned-whitelist.patch \
+           file://0001-Fix-enable-vfp-flag.patch \
+           file://liboil_fix_for_x32.patch \
+          "
 
 SRC_URI[md5sum] = "47dc734f82faeb2964d97771cfd2e701"
 SRC_URI[sha256sum] = "105f02079b0b50034c759db34b473ecb5704ffa20a5486b60a8b7698128bfc69"

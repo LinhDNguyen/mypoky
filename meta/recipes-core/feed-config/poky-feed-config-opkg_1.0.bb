@@ -1,8 +1,9 @@
 DESCRIPTION = "Poky example feed configuration"
 LICENSE = "MIT"
-LIC_FILES_CHKSUM = "file://${POKYBASE}/meta/COPYING.MIT;md5=3da9cfbcb788c80a0384361b4de20420"
-PR = "r1"
+LIC_FILES_CHKSUM = "file://${COREBASE}/meta/COPYING.MIT;md5=3da9cfbcb788c80a0384361b4de20420"
+PR = "r2"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
+INHIBIT_DEFAULT_DEPS = "1"
 
 #FEEDNAMEPREFIX ?= "INVALID"
 #FEEDURIPREFIX ?= "INVALID"
@@ -13,7 +14,7 @@ do_compile() {
 	archconf=${S}/${sysconfdir}/opkg/arch.conf
 
 	rm -f $archconf
-	ipkgarchs="${PACKAGE_ARCHS}"
+	ipkgarchs="${ALL_MULTILIB_PACKAGE_ARCHS}"
 	priority=1
 	for arch in $ipkgarchs; do 
 		echo "arch $arch $priority" >> $archconf

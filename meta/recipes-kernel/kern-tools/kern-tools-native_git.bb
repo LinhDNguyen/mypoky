@@ -1,29 +1,23 @@
 DESCRIPTION = "Scripts and utilities for managing Yocto branched kernels."
-LICENSE = "GPL"
-LIC_FILES_CHKSUM = "file://git/tools/kgit;beginline=5;endline=9;md5=e2bf4415f3d843f43d2e22b0d91a6fee"
+LICENSE = "GPLv2"
+LIC_FILES_CHKSUM = "file://git/tools/kgit;beginline=5;endline=9;md5=d8d1d729a70cd5f52972f8884b80743d"
 
 DEPENDS = "git-native guilt-native"
 
-PR = r10
+SRCREV = "a04138a02644eada0d012196e5ac3db4f516114d"
+PR = "r12"
 PV = "0.1+git${SRCPV}"
 
 inherit native
 
-SRC_URI = "git://git.pokylinux.org/yocto-kernel-tools.git;protocol=git"
+SRC_URI = "git://git.yoctoproject.org/yocto-kernel-tools.git;protocol=git"
 S = "${WORKDIR}"
-
-kern_tools_LIST = kgit kgit-init kgit-meta \
-                  kgit-checkpoint kgit-clean \
-                  generate_cfg kconf_check configme \
-		  createme updateme patchme get_defconfig scc
 
 do_compile() { 
 	:
 }
 
 do_install() {
-	install -d ${D}${bindir}
-	for s in ${kern_tools_LIST}; do
-	    install -m 0755 ${S}/git/tools/$s ${D}${bindir}
-	done
+	cd ${S}/git
+	make DESTDIR=${D}${bindir} install
 }

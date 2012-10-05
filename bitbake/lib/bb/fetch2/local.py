@@ -26,10 +26,12 @@ BitBake build tools.
 # Based on functions from the base bb module, Copyright 2003 Holger Schurig
 
 import os
+import urllib
 import bb
 import bb.utils
 from   bb import data
-from   bb.fetch2 import FetchMethod
+from   bb.fetch2 import FetchMethod, FetchError
+from   bb.fetch2 import logger
 
 class Local(FetchMethod):
     def supports(self, url, urldata, d):
@@ -40,29 +42,31 @@ class Local(FetchMethod):
 
     def urldata_init(self, ud, d):
         # We don't set localfile as for this fetcher the file is already local!
-        ud.basename = os.path.basename(ud.url.split("://")[1].split(";")[0])
+        ud.decodedurl = urllib.unquote(ud.url.split("://")[1].split(";")[0])
+        ud.basename = os.path.basename(ud.decodedurl)
         return
 
     def localpath(self, url, urldata, d):
         """
         Return the local filename of a given url assuming a successful fetch.
         """
-        path = url.split("://")[1]
-        path = path.split(";")[0]
+        path = urldata.decodedurl
         newpath = path
-        dldirfile = os.path.join(data.getVar("DL_DIR", d, True), os.path.basename(path))
-        if os.path.exists(dldirfile):
-            return dldirfile
         if path[0] != "/":
             filespath = data.getVar('FILESPATH', d, True)
             if filespath:
+                logger.debug(2, "Searching for %s in paths:    \n%s" % (path, "\n    ".join(filespath.split(":"))))
                 newpath = bb.utils.which(filespath, path)
             if not newpath:
                 filesdir = data.getVar('FILESDIR', d, True)
                 if filesdir:
+                    logger.debug(2, "Searching for %s in path: %s" % (path, filesdir))
                     newpath = os.path.join(filesdir, path)
-        if not os.path.exists(newpath) and path.find("*") == -1:
-            return dldirfile
+            if not os.path.exists(newpath) and path.find("*") == -1:
+                dldirfile = os.path.join(d.getVar("DL_DIR", True), path)
+                logger.debug(2, "Defaulting to %s for %s" % (dldirfile, path))
+                bb.utils.mkdirhier(os.path.dirname(dldirfile))
+                return dldirfile
         return newpath
 
     def need_update(self, url, ud, d):
@@ -75,7 +79,20 @@ class Local(FetchMethod):
     def download(self, url, urldata, d):
         """Fetch urls (no-op for Local method)"""
         # no need to fetch local files, we'll deal with them in place.
-        return 1
+        if self.supports_checksum(urldata) and not os.path.exists(urldata.localpath):
+            locations = []
+            filespath = data.getVar('FILESPATH', d, True)
+            if filespath:
+                locations = filespath.split(":")
+            filesdir = data.getVar('FILESDIR', d, True)
+            if filesdir:
+                locations.append(filesdir)
+            locations.append(d.getVar("DL_DIR", True))
+
+            msg = "Unable to find file " + url + " anywhere. The paths that were searched were:\n    " + "\n    ".join(locations)
+            raise FetchError(msg)
+
+        return True
 
     def checkstatus(self, url, urldata, d):
         """

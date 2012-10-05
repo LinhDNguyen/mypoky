@@ -65,136 +65,82 @@ class BBLogFormatter(logging.Formatter):
     def format(self, record):
         record.levelname = self.getLevelName(record.levelno)
         if record.levelno == self.PLAIN:
-            return record.getMessage()
+            msg = record.getMessage()
         else:
-            return logging.Formatter.format(self, record)
+            msg = logging.Formatter.format(self, record)
 
-class Loggers(dict):
-    def __getitem__(self, key):
-        if key in self:
-            return dict.__getitem__(self, key)
-        else:
-            log = logging.getLogger("BitBake.%s" % domain._fields[key])
-            dict.__setitem__(self, key, log)
-            return log
+        if hasattr(record, 'bb_exc_info'):
+            etype, value, tb = record.bb_exc_info
+            formatted = bb.exceptions.format_exception(etype, value, tb, limit=5)
+            msg += '\n' + ''.join(formatted)
+        return msg
 
-class DebugLevel(dict):
-    def __getitem__(self, key):
-        if key == "default":
-            key = domain.Default
-        return get_debug_level(key)
+class BBLogFilter(object):
+    def __init__(self, handler, level, debug_domains):
+        self.stdlevel = level
+        self.debug_domains = debug_domains
+        loglevel = level
+        for domain in debug_domains:
+            if debug_domains[domain] < loglevel:
+                loglevel = debug_domains[domain]
+        handler.setLevel(loglevel)
+        handler.addFilter(self)
 
-def _NamedTuple(name, fields):
-    Tuple = collections.namedtuple(name, " ".join(fields))
-    return Tuple(*range(len(fields)))
+    def filter(self, record):
+        if record.levelno >= self.stdlevel:
+            return True
+        if record.name in self.debug_domains and record.levelno >= self.debug_domains[record.name]:
+            return True
+        return False
 
-domain = _NamedTuple("Domain", (
-    "Default",
-    "Build",
-    "Cache",
-    "Collection",
-    "Data",
-    "Depends",
-    "Fetcher",
-    "Parsing",
-    "PersistData",
-    "Provider",
-    "RunQueue",
-    "TaskData",
-    "Util"))
-logger = logging.getLogger("BitBake")
-loggers = Loggers()
-debug_level = DebugLevel()
+
 
 # Message control functions
 #
 
-def set_debug_level(level):
-    for log in loggers.itervalues():
-        log.setLevel(logging.NOTSET)
+loggerDefaultDebugLevel = 0
+loggerDefaultVerbose = False
+loggerVerboseLogs = False
+loggerDefaultDomains = []
 
-    if level:
-        logger.setLevel(logging.DEBUG - level + 1)
+def init_msgconfig(verbose, debug, debug_domains = []):
+    """
+    Set default verbosity and debug levels config the logger
+    """
+    bb.msg.loggerDefaultDebugLevel = debug
+    bb.msg.loggerDefaultVerbose = verbose
+    if verbose:
+        bb.msg.loggerVerboseLogs = True
+    bb.msg.loggerDefaultDomains = debug_domains
+
+def addDefaultlogFilter(handler):
+
+    debug = loggerDefaultDebugLevel
+    verbose = loggerDefaultVerbose
+    domains = loggerDefaultDomains
+
+    if debug:
+        level = BBLogFormatter.DEBUG - debug + 1
+    elif verbose:
+        level = BBLogFormatter.VERBOSE
     else:
-        logger.setLevel(logging.INFO)
+        level = BBLogFormatter.NOTE
 
-def get_debug_level(msgdomain = domain.Default):
-    if not msgdomain:
-        level = logger.getEffectiveLevel()
-    else:
-        level = loggers[msgdomain].getEffectiveLevel()
-    return max(0, logging.DEBUG - level + 1)
+    debug_domains = {}
+    for (domainarg, iterator) in groupby(domains):
+        dlevel = len(tuple(iterator))
+        debug_domains["BitBake.%s" % domainarg] = logging.DEBUG - dlevel + 1
 
-def set_verbose(level):
-    if level:
-        logger.setLevel(BBLogFormatter.VERBOSE)
-    else:
-        logger.setLevel(BBLogFormatter.INFO)
-
-def set_debug_domains(domainargs):
-    for (domainarg, iterator) in groupby(domainargs):
-        for index, msgdomain in enumerate(domain._fields):
-            if msgdomain == domainarg:
-                level = len(tuple(iterator))
-                if level:
-                    loggers[index].setLevel(logging.DEBUG - level + 1)
-                break
-        else:
-            warn(None, "Logging domain %s is not valid, ignoring" % domainarg)
+    BBLogFilter(handler, level, debug_domains)
 
 #
 # Message handling functions
 #
 
-def debug(level, msgdomain, msg):
-    warnings.warn("bb.msg.debug will soon be deprecated in favor of the python 'logging' module",
-                  PendingDeprecationWarning, stacklevel=2)
-    level = logging.DEBUG - (level - 1)
-    if not msgdomain:
-        logger.debug(level, msg)
-    else:
-        loggers[msgdomain].debug(level, msg)
-
-def plain(msg):
-    warnings.warn("bb.msg.plain will soon be deprecated in favor of the python 'logging' module",
-                  PendingDeprecationWarning, stacklevel=2)
-    logger.plain(msg)
-
-def note(level, msgdomain, msg):
-    warnings.warn("bb.msg.note will soon be deprecated in favor of the python 'logging' module",
-                  PendingDeprecationWarning, stacklevel=2)
-    if level > 1:
-        if msgdomain:
-            logger.verbose(msg)
-        else:
-            loggers[msgdomain].verbose(msg)
-    else:
-        if msgdomain:
-            logger.info(msg)
-        else:
-            loggers[msgdomain].info(msg)
-
-def warn(msgdomain, msg):
-    warnings.warn("bb.msg.warn will soon be deprecated in favor of the python 'logging' module",
-                  PendingDeprecationWarning, stacklevel=2)
-    if not msgdomain:
-        logger.warn(msg)
-    else:
-        loggers[msgdomain].warn(msg)
-
-def error(msgdomain, msg):
-    warnings.warn("bb.msg.error will soon be deprecated in favor of the python 'logging' module",
-                  PendingDeprecationWarning, stacklevel=2)
-    if not msgdomain:
-        logger.error(msg)
-    else:
-        loggers[msgdomain].error(msg)
-
 def fatal(msgdomain, msg):
-    warnings.warn("bb.msg.fatal will soon be deprecated in favor of raising appropriate exceptions",
-                  PendingDeprecationWarning, stacklevel=2)
-    if not msgdomain:
-        logger.critical(msg)
+    if msgdomain:
+        logger = logging.getLogger("BitBake.%s" % msgdomain)
     else:
-        loggers[msgdomain].critical(msg)
+        logger = logging.getLogger("BitBake")
+    logger.critical(msg)
     sys.exit(1)

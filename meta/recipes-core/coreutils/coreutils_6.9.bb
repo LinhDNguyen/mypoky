@@ -8,13 +8,13 @@ BUGTRACKER = "http://debbugs.gnu.org/coreutils"
 LICENSE = "GPLv2+"
 LIC_FILES_CHKSUM = "file://COPYING;md5=751419260aa954499f7abaabaa882bbe \
                     file://src/ls.c;startline=4;endline=16;md5=482a96d4f25010a4e13f8743e0c3685e"
-PR = "r1"
-DEPENDS = "perl-native coreutils-native-${PV} gettext "
-DEPENDS_virtclass-native = "perl-native gettext-native"
+PR = "r3"
+DEPENDS = "coreutils-native-${PV}"
+DEPENDS_virtclass-native = "gettext-native"
 
 inherit autotools gettext
 
-SRC_URI_BASE = "http://ftp.gnu.org/gnu/coreutils/${BP}.tar.bz2 \
+SRC_URI_BASE = "${GNU_MIRROR}/coreutils/${BP}.tar.bz2 \
            file://gnulib_m4.patch \
            file://futimens.patch \
            file://coreutils-ls-x.patch \
@@ -22,10 +22,16 @@ SRC_URI_BASE = "http://ftp.gnu.org/gnu/coreutils/${BP}.tar.bz2 \
            file://coreutils-i18n.patch \
            file://coreutils-overflow.patch \
            file://coreutils-fix-install.patch \
-           file://man-touch.patch"
+           file://man-touch.patch \
+           file://coreutils_fix_for_automake-1.12.patch \
+           file://coreutils-build-with-acl.patch \
+           "
 
 SRC_URI = "${SRC_URI_BASE} file://fix_for_manpage_building.patch"
 SRC_URI_virtclass-native = "${SRC_URI_BASE}"
+
+SRC_URI[md5sum] = "c9607d8495f16e98906e7ed2d9751a06"
+SRC_URI[sha256sum] = "89c2895ad157de50e53298b22d91db116ee4e1dd3fdf4019260254e2e31497b0"
 
 # [ gets a special treatment and is not included in this
 bindir_progs = "base64 basename cksum comm csplit cut dir dircolors dirname du \
@@ -33,59 +39,47 @@ bindir_progs = "base64 basename cksum comm csplit cut dir dircolors dirname du \
                 join link logname md5sum mkfifo nice nl nohup od paste pathchk \
                 pinky pr printenv printf ptx readlink seq sha1sum sha224sum sha256sum \
                 sha384sum sha512sum shred shuf sort split stat sum tac tail tee test \
-                tr tsort tty unexpand uniq unlink users vdir wc who whoami yes"
+                tr tsort tty unexpand uniq unlink users vdir wc who whoami yes uptime"
 
 # hostname gets a special treatment and is not included in this
 base_bindir_progs = "cat chgrp chmod chown cp date dd echo false kill ln ls mkdir \
-                     mknod mv pwd rm rmdir sleep stty sync touch true uname"
+                     mknod mv pwd rm rmdir sleep stty sync touch true uname hostname"
 
 sbindir_progs= "chroot"
 
 do_install() {
 	autotools_do_install
 
-	for i in ${bindir_progs}; do mv ${D}${bindir}/$i ${D}${bindir}/$i.${PN}; done
-
 	install -d ${D}${base_bindir}
-	for i in ${base_bindir_progs}; do mv ${D}${bindir}/$i ${D}${base_bindir}/$i.${PN}; done
+	[ "${bindir}" != "${base_bindir}" ] && for i in ${base_bindir_progs}; do mv ${D}${bindir}/$i ${D}${base_bindir}/$i; done
 
 	install -d ${D}${sbindir}
-	for i in ${sbindir_progs}; do mv ${D}${bindir}/$i ${D}${sbindir}/$i.${PN}; done
+	[ "${bindir}" != "${sbindir}" ] && for i in ${sbindir_progs}; do mv ${D}${bindir}/$i ${D}${sbindir}/$i; done
 
 	# [ requires special handling because [.coreutils will cause the sed stuff
 	# in update-alternatives to fail, therefore use lbracket - the name used
 	# for the actual source file.
-	mv ${D}${bindir}/[ ${D}${bindir}/lbracket.${PN}
-
-	# hostname and uptime separated. busybox's versions are preferred
-	mv ${D}${bindir}/hostname ${D}${base_bindir}/hostname.${PN}
-	mv ${D}${bindir}/uptime ${D}${bindir}/uptime.${PN}
+	mv ${D}${bindir}/[ ${D}${bindir}/lbracket.${BPN}
 }
 
-pkg_postinst_${PN} () {
-	for i in ${bindir_progs}; do update-alternatives --install ${bindir}/$i $i $i.${PN} 100; done
+inherit update-alternatives
 
-	for i in ${base_bindir_progs}; do update-alternatives --install ${base_bindir}/$i $i $i.${PN} 100; done
+ALTERNATIVE_PRIORITY = "100"
 
-	for i in ${sbindir_progs}; do update-alternatives --install ${sbindir}/$i $i $i.${PN} 100; done
+ALTERNATIVE_${PN} = "lbracket ${bindir_progs} ${base_bindir_progs} ${sbindir_progs}"
 
-	# Special cases. uptime and hostname is broken, prefer busybox's version. [ needs to be treated separately.
-	update-alternatives --install ${bindir}/uptime uptime uptime.${PN} 10
-	update-alternatives --install ${base_bindir}/hostname hostname hostname.${PN} 10
-	update-alternatives --install '${bindir}/[' '[' 'lbracket.${PN}' 100
-}
+ALTERNATIVE_PRIORITY[uptime] = "10"
+ALTERNATIVE_PRIORITY[hostname] = "10"
 
-pkg_prerm_${PN} () {
-	for i in ${bindir_progs}; do update-alternatives --remove $i $i.${PN}; done
+ALTERNATIVE_LINK_NAME[lbracket] = "${bindir}/["
+ALTERNATIVE_TARGET[lbracket] = "${bindir}/lbracket.${BPN}"
 
-	for i in ${base_bindir_progs}; do update-alternatives --remove $i $i.${PN}; done
+python __anonymous() {
+	for prog in d.getVar('base_bindir_progs', True).split():
+		d.setVarFlag('ALTERNATIVE_LINK_NAME', prog, '%s/%s' % (d.getVar('base_bindir', True), prog))
 
-	for i in ${sbindir_progs}; do update-alternatives --remove $i $i.${PN}; done
-
-	# The special cases
-	update-alternatives --remove hostname hostname.${PN}
-	update-alternatives --remove uptime uptime.${PN}
-	update-alternatives --remove '[' 'lbracket.${PN}'
+	for prog in d.getVar('sbindir_progs', True).split():
+		d.setVarFlag('ALTERNATIVE_LINK_NAME', prog, '%s/%s' % (d.getVar('sbindir', True), prog))
 }
 
 BBCLASSEXTEND = "native"

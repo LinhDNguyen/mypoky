@@ -1,10 +1,15 @@
 SUMMARY = "Miscellaneous files for the base system."
 DESCRIPTION = "The base-files package creates the basic system directory structure and provides a small set of key configuration files for the system."
 SECTION = "base"
-PRIORITY = "required"
-PR = "r67"
+PR = "r72"
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://licenses/GPL-2;md5=94d55d512a9ba36caa9b7df079bae19f"
+# Removed all license related tasks in this recipe as license.bbclass 
+# now deals with this. In order to get accurate licensing on to the image:
+# Set COPY_LIC_MANIFEST to just copy just the license.manifest to the image
+# For the manifest and the license text for each package:
+# Set COPY_LIC_MANIFEST and COPY_LIC_DIRS
+
 SRC_URI = "file://rotation \
            file://nsswitch.conf \
            file://motd \
@@ -19,15 +24,11 @@ SRC_URI = "file://rotation \
            file://usbd \
            file://share/dot.bashrc \
            file://share/dot.profile \
-           file://licenses/BSD \
            file://licenses/GPL-2 \
-           file://licenses/GPL-3 \
-           file://licenses/LGPL-2 \
-           file://licenses/LGPL-2.1 \
-           file://licenses/LGPL-3 \
-           file://licenses/GFDL-1.2 \
-           file://licenses/Artistic"
+           "
 S = "${WORKDIR}"
+
+INHIBIT_DEFAULT_DEPS = "1"
 
 docdir_append = "/${P}"
 dirs1777 = "/tmp ${localstatedir}/volatile/lock ${localstatedir}/volatile/tmp"
@@ -63,10 +64,6 @@ conffiles = "${sysconfdir}/debian_version ${sysconfdir}/host.conf \
 # set standard hostname, might be a candidate for a DISTRO variable? :M:
 #
 hostname = "openembedded"
-hostname_slugos = "nslu2"
-hostname_mnci = "MNCI"
-hostname_rt3000 = "MNRT"
-hostname_jlime = "JLime"
 
 BASEFILESISSUEINSTALL ?= "do_install_basefilesissue"
 
@@ -106,27 +103,25 @@ do_install () {
 	install -m 0644 ${WORKDIR}/host.conf ${D}${sysconfdir}/host.conf
 	install -m 0644 ${WORKDIR}/motd ${D}${sysconfdir}/motd
 
-	for license in BSD GPL-2 LGPL-2 LGPL-2.1 Artistic GPL-3 LGPL-3 GFDL-1.2; do
-		install -m 0644 ${WORKDIR}/licenses/$license ${D}${datadir}/common-licenses/
-	done
-
 	ln -sf /proc/mounts ${D}${sysconfdir}/mtab
 }
 
 do_install_basefilesissue () {
-	if [ -n "${MACHINE}" -a "${hostname}" = "openembedded" ]; then
-		echo ${MACHINE} > ${D}${sysconfdir}/hostname
-	else
-		echo ${hostname} > ${D}${sysconfdir}/hostname
+	if [ "${hostname}" != "" ]; then
+		if [ -n "${MACHINE}" -a "${hostname}" = "openembedded" ]; then
+			echo ${MACHINE} > ${D}${sysconfdir}/hostname
+		else
+			echo ${hostname} > ${D}${sysconfdir}/hostname
+		fi
 	fi
 
 	install -m 644 ${WORKDIR}/issue*  ${D}${sysconfdir}  
         if [ -n "${DISTRO_NAME}" ]; then
-		echo -n "${DISTRO_NAME} " >> ${D}${sysconfdir}/issue
-		echo -n "${DISTRO_NAME} " >> ${D}${sysconfdir}/issue.net
+		printf "${DISTRO_NAME} " >> ${D}${sysconfdir}/issue
+		printf "${DISTRO_NAME} " >> ${D}${sysconfdir}/issue.net
 		if [ -n "${DISTRO_VERSION}" ]; then
-			echo -n "${DISTRO_VERSION} " >> ${D}${sysconfdir}/issue
-			echo -n "${DISTRO_VERSION} " >> ${D}${sysconfdir}/issue.net
+			printf "${DISTRO_VERSION} " >> ${D}${sysconfdir}/issue
+			printf "${DISTRO_VERSION} " >> ${D}${sysconfdir}/issue.net
 		fi
 		echo "\n \l" >> ${D}${sysconfdir}/issue
 		echo >> ${D}${sysconfdir}/issue
@@ -135,32 +130,7 @@ do_install_basefilesissue () {
  	fi
 }
 
-do_install_append_mnci () {
-	rmdir ${D}/tmp
-	ln -s var/tmp ${D}/tmp
-}
-
-do_install_append_nylon() {
-	printf "" "" >${D}${sysconfdir}/resolv.conf
-	rm -r ${D}/mnt/*
-	rm -r ${D}/media
-	rm -rf ${D}/tmp
-	ln -sf /var/tmp ${D}/tmp
-}
-
-do_install_append_slugos() {
-	printf "" "" >${D}${sysconfdir}/resolv.conf
-	rm -r ${D}/mnt/*
-	rmdir ${D}/home/root
-	install -m 0755 -d ${D}/root
-	ln -s ../root ${D}/home/root
-}
-
-do_install_append_netbook-pro () {
-	mkdir -p ${D}/initrd
-}
-
-do_install_append_poky-lsb() {
+do_install_append_linuxstdbase() {
 	for d in ${dirs3755}; do
                 install -m 0755 -d ${D}$d
         done
@@ -174,22 +144,7 @@ PACKAGES = "${PN}-doc ${PN} ${PN}-dev ${PN}-dbg"
 FILES_${PN} = "/"
 FILES_${PN}-doc = "${docdir} ${datadir}/common-licenses"
 
-# M&N specific packaging
-PACKAGE_ARCH_mnci = "mnci"
-PACKAGE_ARCH_rt3000 = "rt3000"
-
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
-# Unslung distribution specific packaging
-
-PACKAGES_unslung = "${PN}-unslung"
-PACKAGE_ARCH_${PN}-unslung = "nslu2"
-RDEPENDS_${PN}-unslung = "nslu2-linksys-ramdisk"
-RPROVIDES_${PN}-unslung = "${PN}"
-
-FILES_${PN}-unslung = ""
-
-CONFFILES_${PN} = "${sysconfdir}/fstab ${sysconfdir}/hostname"
-CONFFILES_${PN}_nylon = "${sysconfdir}/resolv.conf ${sysconfdir}/fstab ${sysconfdir}/hostname"
-CONFFILES_${PN}_slugos = "${sysconfdir}/resolv.conf ${sysconfdir}/fstab ${sysconfdir}/hostname"
+CONFFILES_${PN} = "${sysconfdir}/fstab ${@['', '${sysconfdir}/hostname'][(d.getVar('hostname', True) != '')]}"
 

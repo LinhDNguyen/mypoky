@@ -4,15 +4,13 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=393a5ca445f6965873eca0259a17f833"
 
 DEPENDS = "libaio"
 
-PR = r2
-PV = "1.0.1+git${SRCPV}"
+SRCREV = "d6918c8832793b4205ed3bfede78c2f915c23385"
+
+PR = "r4"
+PV = "1.0.5+git${SRCPV}"
 
 SRC_URI = "git://git.kernel.dk/blktrace.git;protocol=git \
-           file://blktrace-makefile.patch \
-           file://dso_linking_change_build_fix.patch"
-
-SRC_URI[md5sum] = "588aa9ab8a14d1766ab3f061d728ed89"
-SRC_URI[sha256sum] = "f3cb6a3df1b3dc67369c7c4da3444a7897aa8a18e55937b368e0a6aa2f64b3aa"
+           file://blktrace-makefile.patch"
 
 S = "${WORKDIR}/git"
 

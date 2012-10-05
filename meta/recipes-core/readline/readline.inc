@@ -3,7 +3,6 @@ command lines as they are typed in. Both Emacs and vi editing modes are availabl
 additional functions to maintain a list of previously-entered command lines, to recall and perhaps reedit those   \
 lines, and perform csh-like history expansion on previous commands."
 SECTION = "libs"
-PRIORITY = "optional"
 
 # GPLv2+ (< 6.0), GPLv3+ (>= 6.0)
 LICENSE = "GPLv3+"
@@ -13,6 +12,7 @@ DEPENDS += "ncurses"
 
 SRC_URI = "${GNU_MIRROR}/readline/${BPN}-${PV}.tar.gz \
            file://configure-fix.patch \
+           file://norpath.patch \
            file://acinclude.m4"
 
 S = "${WORKDIR}/${BPN}-${PV}"
@@ -29,6 +29,8 @@ do_install_append () {
 	# Make install doesn't properly install these
 	oe_libinstall -so -C shlib libhistory ${D}${libdir}
 	oe_libinstall -so -C shlib libreadline ${D}${libdir}
+
+	rmdir ${D}${bindir}
 }
 
 BBCLASSEXTEND = "native nativesdk"

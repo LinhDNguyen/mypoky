@@ -1,10 +1,12 @@
 require pseudo.inc
 
-PV = "1.0+git${SRCPV}"
-PR = "r18"
+SRCREV = "398a264490713c912b4ce465251a8a82a7905f45"
+PV = "1.4.1+git${SRCPV}"
+PR = "r28"
 
-SRC_URI = "git://github.com/wrpseudo/pseudo.git;protocol=git \
-           file://static_sqlite.patch"
+DEFAULT_PREFERENCE = "-1"
+
+SRC_URI = "git://git.yoctoproject.org/pseudo;protocol=git"
 
 S = "${WORKDIR}/git"
 

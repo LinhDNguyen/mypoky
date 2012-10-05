@@ -24,7 +24,7 @@ import threading
 import xmlrpclib
 import bb
 import bb.event
-from bb.ui.crumbs.progress import ProgressBar
+from bb.ui.crumbs.progressbar import HobProgressBar
 
 # Package Model
 (COL_PKG_NAME) = (0)
@@ -199,10 +199,13 @@ class gtkthread(threading.Thread):
 def main(server, eventHandler):
     try:
         cmdline = server.runCommand(["getCmdLineAction"])
-        if not cmdline or cmdline[0] != "generateDotGraph":
+        if cmdline and not cmdline['action']:
+            print(cmdline['msg'])
+            return
+        elif not cmdline or (cmdline['action'] and cmdline['action'][0] != "generateDotGraph"):
             print("This UI is only compatible with the -g option")
             return
-        ret = server.runCommand(["generateDepTreeEvent", cmdline[1], cmdline[2]])
+        ret = server.runCommand(["generateDepTreeEvent", cmdline['action'][1], cmdline['action'][2]])
         if ret != True:
             print("Couldn't run command! %s" % ret)
             return
@@ -217,8 +220,13 @@ def main(server, eventHandler):
 
     gtk.gdk.threads_enter()
     dep = DepExplorer()
-    pbar = ProgressBar(dep)
-    pbar.connect("delete-event", gtk.main_quit)
+    bardialog = gtk.Dialog(parent=dep,
+                           flags=gtk.DIALOG_MODAL|gtk.DIALOG_DESTROY_WITH_PARENT)
+    bardialog.set_default_size(400, 50)
+    pbar = HobProgressBar()
+    bardialog.vbox.pack_start(pbar)
+    bardialog.show_all()
+    bardialog.connect("delete-event", gtk.main_quit)
     gtk.gdk.threads_leave()
 
     progress_total = 0
@@ -235,39 +243,42 @@ def main(server, eventHandler):
             if isinstance(event, bb.event.CacheLoadStarted):
                 progress_total = event.total
                 gtk.gdk.threads_enter()
-                pbar.set_title("Loading Cache")
-                pbar.update(0, progress_total)
+                bardialog.set_title("Loading Cache")
+                pbar.update(0)
                 gtk.gdk.threads_leave()
 
             if isinstance(event, bb.event.CacheLoadProgress):
                 x = event.current
                 gtk.gdk.threads_enter()
-                pbar.update(x, progress_total)
+                pbar.update(x * 1.0 / progress_total)
+                pbar.set_title('')
                 gtk.gdk.threads_leave()
                 continue
 
             if isinstance(event, bb.event.CacheLoadCompleted):
-                gtk.gdk.threads_enter()
-                pbar.update(progress_total, progress_total)
-                gtk.gdk.threads_leave()
+                bardialog.hide()
                 continue
 
             if isinstance(event, bb.event.ParseStarted):
                 progress_total = event.total
+                if progress_total == 0:
+                    continue
                 gtk.gdk.threads_enter()
-                pbar.set_title("Processing recipes")
-                pbar.update(0, progress_total)
+                pbar.update(0)
+                bardialog.set_title("Processing recipes")
+
                 gtk.gdk.threads_leave()
 
             if isinstance(event, bb.event.ParseProgress):
                 x = event.current
                 gtk.gdk.threads_enter()
-                pbar.update(x, progress_total)
+                pbar.update(x * 1.0 / progress_total)
+                pbar.set_title('')
                 gtk.gdk.threads_leave()
                 continue
 
             if isinstance(event, bb.event.ParseCompleted):
-                pbar.hide()
+                bardialog.hide()
                 continue
 
             if isinstance(event, bb.event.DepTreeGenerated):

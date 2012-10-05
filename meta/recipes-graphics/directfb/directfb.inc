@@ -11,15 +11,12 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=dcf3c825659e82539645da41a7908589"
 HOMEPAGE = "http://directfb.org"
 DEPENDS = "jpeg libpng freetype zlib tslib"
 
-SRC_URI = " \
-    http://www.directfb.org/downloads/Old/DirectFB-${PV}.tar.gz \
-    file://fix-pkgconfig-cflags.patch \
-    file://fix-font-missing-char.patch \
-    file://getpagesize.patch \
-    file://mkdfiff.patch \
-    file://dont-use-linux-config.patch \
-    file://ts_lib_autotools.patch \
-"
+INC_PR = "r0"
+
+SRC_URI = "http://directfb.org/downloads/Core/DirectFB-1.6/DirectFB-${PV}.tar.gz \
+           file://directfb-1.2.x-fix-pkgconfig-cflags.patch \
+           file://configurefix.patch"
+
 S = "${WORKDIR}/DirectFB-${PV}"
 
 LDFLAGS_append =" -lts -lm"
@@ -38,8 +35,7 @@ EXTRA_OECONF = "\
 #PACKAGES_DYNAMIC = "directfb-inputdrivers-*"
 #
 #python populate_packages_prepend () {
-#    import os.path
-#    inputdrivers_libdir = bb.data.expand('${libdir}/directfb-${RV}/inputdrivers', d)
+#    inputdrivers_libdir = d.expand('${libdir}/directfb-${RV}/inputdrivers')
 #    do_split_packages(d, inputdrivers_libdir, '*.so$', 'directfb-inputdrivers-%s', 'Directfb plugin for %s')
 #}
 

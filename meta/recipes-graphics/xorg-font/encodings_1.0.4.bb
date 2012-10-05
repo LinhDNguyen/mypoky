@@ -4,12 +4,16 @@ DESCRIPTION = "The encodings that map to specific characters for a \
 number of Xorg and common fonts."
 
 require xorg-font-common.inc
-LICENSE = "Public Domain"
+LICENSE = "PD"
 LIC_FILES_CHKSUM = "file://COPYING;md5=9da93f2daf2d5572faa2bfaf0dbd9e76"
 PE = "1"
-PR = "${INC_PR}.0"
+PR = "${INC_PR}.1"
 
 DEPENDS = "mkfontscale-native font-util-native"
+
+SRC_URI += "file://nocompiler.patch"
+
+inherit allarch
 
 EXTRA_OECONF += "--with-encodingsdir=${datadir}/fonts/X11/encodings"
 

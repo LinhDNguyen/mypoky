@@ -6,32 +6,43 @@ basic functions of the window system."
 
 require xorg-lib-common.inc
 
+inherit siteinfo
+
+FILESPATH = "${FILE_DIRNAME}/libx11"
+
+PE = "1"
+INC_PR = "r9"
+
 PROVIDES = "virtual/libx11"
 
 XORG_PN = "libX11"
-LEAD_SONAME = "libX11.so"
+LICENSE = "MIT & MIT-style & BSD"
+LIC_FILES_CHKSUM = "file://COPYING;md5=172255dee66bb0151435b2d5d709fcf7"
 
-EXTRA_OECONF += "--with-keysymdef=${STAGING_INCDIR}/X11/keysymdef.h --disable-specs"
+DEPENDS += "xproto xextproto xtrans libxcb kbproto inputproto"
+DEPENDS += "xproto-native"
+
+EXTRA_OECONF += "--with-keysymdefdir=${STAGING_INCDIR}/X11/"
+EXTRA_OEMAKE += 'CWARNFLAGS=""'
+
+# Let people with incredibly archaic requirements enable Xcms and BigFont, but
+# disable them by default.
+PACKAGECONFIG ??= ""
+PACKAGECONFIG[xcms] = "--enable-xcms,--disable-xcms"
+PACKAGECONFIG[bigfont] = "--enable-xf86bigfont,--disable-xf86bigfont,xf86bigfontproto"
+
+# src/util/makekeys needs to be compiled natively, so tell it what compiler to
+# use.
+export CC_FOR_BUILD = "${BUILD_CC}"
+export CFLAGS_FOR_BUILD = "${BUILD_CFLAGS} -D_GNU_SOURCE"
+export CPPFLAGS_FOR_BUILD = "${BUILD_CPPFLAGS}"
+export LDFLAGS_FOR_BUILD = "${BUILD_LDFLAGS}"
+
+PACKAGES =+ "${PN}-xcb"
 
 FILES_${PN} += "${datadir}/X11/XKeysymDB ${datadir}/X11/XErrorDB ${libdir}/X11/Xcms.txt"
+FILES_${PN}-xcb += "${libdir}/libX11-xcb.so.*"
 FILES_${PN}-locale += "${datadir}/X11/locale ${libdir}/X11/locale"
-
-do_compile() {
-	cd ${S}/src/util
-	mv makekeys.c.orig makekeys.c || true
-	touch makekeys-makekeys.o
-	(
-		unset CC LD CXX CCLD CFLAGS CPPFLAGS LDFLAGS CXXFLAGS
-		${BUILD_CC} ${BUILD_CFLAGS} -I${STAGING_INCDIR_NATIVE} makekeys.c -o makekeys
-	)
-	if [ "$?" != "0" ]; then
-		exit 1
-	fi
-	# mv to stop it getting rebuilt
-	mv makekeys.c makekeys.c.orig
-	cd ${S}
-	oe_runmake
-}
 
 # Multiple libx11 derivatives from from this file and are selected by virtual/libx11
 # A world build should only build the correct version, not all of them.

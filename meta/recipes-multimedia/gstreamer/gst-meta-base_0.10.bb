@@ -1,11 +1,11 @@
 DESCRIPTION = "Gstreamer package groups"
 LICENSE = "MIT"
 DEPENDS = "gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad"
-LIC_FILES_CHKSUM = "file://${POKYBASE}/LICENSE;md5=3f40d7994397109285ec7b81fdeb3b58 \
-                    file://${POKYBASE}/meta/COPYING.MIT;md5=3da9cfbcb788c80a0384361b4de20420"
+LIC_FILES_CHKSUM = "file://${COREBASE}/LICENSE;md5=3f40d7994397109285ec7b81fdeb3b58 \
+                    file://${COREBASE}/meta/COPYING.MIT;md5=3da9cfbcb788c80a0384361b4de20420"
 
 
-PR = "r9"
+PR = "r10"
 
 PACKAGES = "\
     gst-meta-base \
@@ -20,7 +20,7 @@ RDEPENDS_gst-meta-base = "\
     gst-plugins-base-playbin \
     gst-plugins-base-decodebin \
     gst-plugins-base-decodebin2 \
-    gst-plugins-base-gnomevfs \
+    gst-plugins-base-gio \
     gst-plugins-base-alsa \
     gst-plugins-base-volume \
     gst-plugins-base-ximagesink \
@@ -29,7 +29,8 @@ RDEPENDS_gst-meta-base = "\
     gst-plugins-base-typefindfunctions \
     gst-plugins-base-videoscale \
     gst-plugins-base-ffmpegcolorspace \
-    gst-plugins-good-autodetect"
+    gst-plugins-good-autodetect \
+    gst-plugins-good-souphttpsrc"
 
 
 RDEPENDS_gst-meta-audio = "\

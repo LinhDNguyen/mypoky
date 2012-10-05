@@ -33,9 +33,7 @@
 from bb.utils import better_compile, better_exec
 from bb       import error
 
-# A dict of modules we have handled
-# it is the number of .bbclasses + x in size
-_parsed_methods = { }
+# A dict of function names we have seen
 _parsed_fns     = { }
 
 def insert_method(modulename, code, fn):
@@ -52,33 +50,22 @@ def insert_method(modulename, code, fn):
         if name in ['None', 'False']:
             continue
         elif name in _parsed_fns and not _parsed_fns[name] == modulename:
-            error( "Error Method already seen: %s in' %s' now in '%s'" % (name, _parsed_fns[name], modulename))
+            error("The function %s defined in %s was already declared in %s. BitBake has a global python function namespace so shared functions should be declared in a common include file rather than being duplicated, or if the functions are different, please use different function names." % (name, modulename, _parsed_fns[name]))
         else:
             _parsed_fns[name] = modulename
 
-def check_insert_method(modulename, code, fn):
-    """
-    Add the code if it wasnt added before. The module
-    name will be used for that
-
-    Variables:
-        @modulename a short name e.g. base.bbclass
-        @code The actual python code
-        @fn   The filename from the outer file
-    """
-    if not modulename in _parsed_methods:
-        return insert_method(modulename, code, fn)
-    _parsed_methods[modulename] = 1
+# A dict of modules the parser has finished with
+_parsed_methods = {}
 
 def parsed_module(modulename):
     """
-    Inform me file xyz was parsed
+    Has module been parsed?
     """
     return modulename in _parsed_methods
 
+def set_parsed_module(modulename):
+    """
+    Set module as parsed
+    """
+    _parsed_methods[modulename] = True
 
-def get_parsed_dict():
-    """
-    shortcut
-    """
-    return _parsed_methods

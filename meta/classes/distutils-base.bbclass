@@ -1,5 +1,5 @@
-DEPENDS  += "${@["python-native python", ""][(bb.data.getVar('PACKAGES', d, 1) == '')]}"
-RDEPENDS_${PN} += "${@['', 'python-core']['${PN}' == '${BPN}']}"
+DEPENDS  += "${@["python-native python", ""][(d.getVar('PACKAGES', True) == '')]}"
+RDEPENDS_${PN} += "${@['', 'python-core']['${CLASSOVERRIDE}' == 'class-target']}"
 
-inherit distutils-common-base
+inherit distutils-common-base pythonnative
 

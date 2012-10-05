@@ -10,8 +10,8 @@
 
 set -e
 
-if [ -f /etc/syslog.conf ]; then
-	. /etc/syslog.conf
+if [ -f /etc/syslog-startup.conf ]; then
+	. /etc/syslog-startup.conf
 	LOG_LOCAL=0
 	LOG_REMOTE=0
 	for D in $DESTINATION; do
@@ -37,11 +37,14 @@ if [ -f /etc/syslog.conf ]; then
 	if [ "$LOG_LOCAL" = "1" -a "$LOG_REMOTE" = "1" ]; then
 		SYSLOG_ARGS="$SYSLOG_ARGS -L"
 	fi
-	if [ -n "$MARKINT" ]; then
-		SYSLOG_ARGS="$SYSLOG_ARGS -m $MARKINT"
-	fi
 	if [ "$REDUCE" = "yes" ]; then
 		SYSLOG_ARGS="$SYSLOG_ARGS -S"
+	fi
+	if [ "$DROPDUPLICATES" = "yes" ]; then
+	    SYSLOG_ARGS="$SYSLOG_ARGS -D"
+	fi
+	if [ -n "$LOGLEVEL" ]; then
+	    SYSLOG_ARGS="$SYSLOG_ARGS -l $LOGLEVEL"
 	fi
 else
 	# default: log to 16K shm circular buffer

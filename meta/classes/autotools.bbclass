@@ -1,28 +1,27 @@
 def autotools_dep_prepend(d):
-	if bb.data.getVar('INHIBIT_AUTOTOOLS_DEPS', d, 1):
-		return ''
+    if d.getVar('INHIBIT_AUTOTOOLS_DEPS', True):
+        return ''
 
-	pn = bb.data.getVar('PN', d, 1)
-	deps = ''
+    pn = d.getVar('PN', True)
+    deps = ''
 
-	if pn in ['autoconf-native', 'automake-native']:
-		return deps
-	deps += 'autoconf-native automake-native '
+    if pn in ['autoconf-native', 'automake-native', 'help2man-native']:
+        return deps
+    deps += 'autoconf-native automake-native '
 
-	if not pn in ['libtool', 'libtool-native', 'libtool-cross']:
-		deps += 'libtool-native '
-		if not bb.data.inherits_class('native', d) \
+    if not pn in ['libtool', 'libtool-native'] and not pn.endswith("libtool-cross"):
+        deps += 'libtool-native '
+        if not bb.data.inherits_class('native', d) \
+                        and not bb.data.inherits_class('nativesdk', d) \
                         and not bb.data.inherits_class('cross', d) \
-                        and not bb.data.getVar('INHIBIT_DEFAULT_DEPS', d, 1):
-                    deps += 'libtool-cross '
+                        and not d.getVar('INHIBIT_DEFAULT_DEPS', True):
+            deps += 'libtool-cross '
 
-	return deps + 'gnu-config-native '
+    return deps + 'gnu-config-native '
 
 EXTRA_OEMAKE = ""
 
 DEPENDS_prepend = "${@autotools_dep_prepend(d)}"
-DEPENDS_virtclass-native_prepend = "${@autotools_dep_prepend(d)}"
-DEPENDS_virtclass-nativesdk_prepend = "${@autotools_dep_prepend(d)}"
 
 inherit siteinfo
 
@@ -33,16 +32,18 @@ export CONFIG_SITE = "${@siteinfo_get_files(d)}"
 acpaths = "default"
 EXTRA_AUTORECONF = "--exclude=autopoint"
 
+export lt_cv_sys_lib_dlsearch_path_spec = "${libdir} ${base_libdir}"
+
 def autotools_set_crosscompiling(d):
-	if not bb.data.inherits_class('native', d):
-		return " cross_compiling=yes"
-	return ""
+    if not bb.data.inherits_class('native', d):
+        return " cross_compiling=yes"
+    return ""
 
 def append_libtool_sysroot(d):
-	# Only supply libtool sysroot option for non-native packages
-	if not bb.data.inherits_class('native', d):
-		return '--with-libtool-sysroot=${STAGING_DIR_HOST}'
-	return ""
+    # Only supply libtool sysroot option for non-native packages
+    if not bb.data.inherits_class('native', d):
+        return '--with-libtool-sysroot=${STAGING_DIR_HOST}'
+    return ""
 
 # EXTRA_OECONF_append = "${@autotools_set_crosscompiling(d)}"
 
@@ -63,96 +64,134 @@ CONFIGUREOPTS = " --build=${BUILD_SYS} \
 		  --oldincludedir=${oldincludedir} \
 		  --infodir=${infodir} \
 		  --mandir=${mandir} \
+		  --disable-silent-rules \
+		  ${CONFIGUREOPT_DEPTRACK} \
 		  ${@append_libtool_sysroot(d)}"
+CONFIGUREOPT_DEPTRACK = "--disable-dependency-tracking"
+
 
 oe_runconf () {
-	if [ -x ${S}/configure ] ; then
-		cfgcmd="${S}/configure \
-		${CONFIGUREOPTS} ${EXTRA_OECONF} $@"
-		oenote "Running $cfgcmd..."
-		$cfgcmd || oefatal "oe_runconf failed" 
+	cfgscript="${S}/configure"
+	if [ -x "$cfgscript" ] ; then
+		bbnote "Running $cfgscript ${CONFIGUREOPTS} ${EXTRA_OECONF} $@"
+		set +e
+		${CACHED_CONFIGUREVARS} $cfgscript ${CONFIGUREOPTS} ${EXTRA_OECONF} "$@"
+		if [ "$?" != "0" ]; then
+			echo "Configure failed. The contents of all config.log files follows to aid debugging"
+			find ${S} -name config.log -print -exec cat {} \;
+			bbfatal "oe_runconf failed"
+		fi
+		set -e
 	else
-		oefatal "no configure script found"
+		bbfatal "no configure script found at $cfgscript"
 	fi
 }
 
-autotools_do_configure() {
-	case ${PN} in
-	autoconf*)
-	;;
-	automake*)
-	;;
-	*)
-		# WARNING: gross hack follows:
-		# An autotools built package generally needs these scripts, however only
-		# automake or libtoolize actually install the current versions of them.
-		# This is a problem in builds that do not use libtool or automake, in the case
-		# where we -need- the latest version of these scripts.  e.g. running a build
-		# for a package whose autotools are old, on an x86_64 machine, which the old
-		# config.sub does not support.  Work around this by installing them manually
-		# regardless.
-		( for ac in `find ${S} -name configure.in -o -name configure.ac`; do
-			rm -f `dirname $ac`/configure
-			done )
-		if [ -e ${S}/configure.in -o -e ${S}/configure.ac ]; then
-			olddir=`pwd`
-			cd ${S}
-			if [ x"${acpaths}" = xdefault ]; then
-				acpaths=
-				for i in `find ${S} -maxdepth 2 -name \*.m4|grep -v 'aclocal.m4'| \
-					grep -v 'acinclude.m4' | sed -e 's,\(.*/\).*$,\1,'|sort -u`; do
-					acpaths="$acpaths -I $i"
-				done
-			else
-				acpaths="${acpaths}"
-			fi
-			AUTOV=`automake --version |head -n 1 |sed "s/.* //;s/\.[0-9]\+$//"`
-			automake --version
-			echo "AUTOV is $AUTOV"
-			if [ -d ${STAGING_DATADIR_NATIVE}/aclocal-$AUTOV ]; then
-				acpaths="$acpaths -I${STAGING_DATADIR_NATIVE}/aclocal-$AUTOV"
-			fi
-			if [ -d ${STAGING_DATADIR}/aclocal ]; then
-				acpaths="$acpaths -I ${STAGING_DATADIR}/aclocal"
-			fi
-			# autoreconf is too shy to overwrite aclocal.m4 if it doesn't look
-			# like it was auto-generated.  Work around this by blowing it away
-			# by hand, unless the package specifically asked not to run aclocal.
-			if ! echo ${EXTRA_AUTORECONF} | grep -q "aclocal"; then
-				rm -f aclocal.m4
-			fi
-			if [ -e configure.in ]; then
-			  CONFIGURE_AC=configure.in
-			else
-			  CONFIGURE_AC=configure.ac
-			fi
-			if grep "^[[:space:]]*AM_GLIB_GNU_GETTEXT" $CONFIGURE_AC >/dev/null; then
-			  if grep "sed.*POTFILES" $CONFIGURE_AC >/dev/null; then
-			    : do nothing -- we still have an old unmodified configure.ac
-			  else
-			    oenote Executing glib-gettextize --force --copy
-			    echo "no" | glib-gettextize --force --copy
-			  fi
-			else if grep "^[[:space:]]*AM_GNU_GETTEXT" $CONFIGURE_AC >/dev/null; then
-			  cp ${STAGING_DATADIR}/gettext/config.rpath ${S}/
-			fi
+AUTOTOOLS_AUXDIR ?= "${S}"
 
-			fi
-			mkdir -p m4
-			if grep "^[[:space:]]*[AI][CT]_PROG_INTLTOOL" $CONFIGURE_AC >/dev/null; then
-			  oenote Executing intltoolize --copy --force --automake
-			  intltoolize --copy --force --automake
-			fi
-			oenote Executing autoreconf --verbose --install --force ${EXTRA_AUTORECONF} $acpaths
-			autoreconf -Wcross --verbose --install --force ${EXTRA_AUTORECONF} $acpaths || oefatal "autoreconf execution failed."
-			cd $olddir
+CONFIGURESTAMPFILE = "${WORKDIR}/configure.sstate"
+
+autotools_preconfigure() {
+	if [ -n "${CONFIGURESTAMPFILE}" -a -e "${CONFIGURESTAMPFILE}" ]; then
+		if [ "`cat ${CONFIGURESTAMPFILE}`" != "${BB_TASKHASH}" -a "${S}" != "${B}" ]; then
+			echo "Previously configured separate build directory detected, cleaning ${B}"
+			rm -rf ${B}
+			mkdir ${B}
 		fi
-	;;
-	esac
+	fi
+}
+
+autotools_postconfigure(){
+	if [ -n "${CONFIGURESTAMPFILE}" ]; then
+		echo ${BB_TASKHASH} > ${CONFIGURESTAMPFILE}
+	fi
+}
+
+do_configure[prefuncs] += "autotools_preconfigure"
+do_configure[postfuncs] += "autotools_postconfigure"
+
+autotools_do_configure() {
+	# WARNING: gross hack follows:
+	# An autotools built package generally needs these scripts, however only
+	# automake or libtoolize actually install the current versions of them.
+	# This is a problem in builds that do not use libtool or automake, in the case
+	# where we -need- the latest version of these scripts.  e.g. running a build
+	# for a package whose autotools are old, on an x86_64 machine, which the old
+	# config.sub does not support.  Work around this by installing them manually
+	# regardless.
+	( for ac in `find ${S} -name configure.in -o -name configure.ac`; do
+		rm -f `dirname $ac`/configure
+		done )
+	if [ -e ${S}/configure.in -o -e ${S}/configure.ac ]; then
+		olddir=`pwd`
+		cd ${S}
+		# Remove any previous copy of the m4 macros
+		rm -rf ${B}/aclocal-copy/
+		if [ x"${acpaths}" = xdefault ]; then
+			acpaths=
+			for i in `find ${S} -maxdepth 2 -name \*.m4|grep -v 'aclocal.m4'| \
+				grep -v 'acinclude.m4' | sed -e 's,\(.*/\).*$,\1,'|sort -u`; do
+				acpaths="$acpaths -I $i"
+			done
+		else
+			acpaths="${acpaths}"
+		fi
+		AUTOV=`automake --version |head -n 1 |sed "s/.* //;s/\.[0-9]\+$//"`
+		automake --version
+		echo "AUTOV is $AUTOV"
+		if [ -d ${STAGING_DATADIR_NATIVE}/aclocal-$AUTOV ]; then
+			acpaths="$acpaths -I${STAGING_DATADIR_NATIVE}/aclocal-$AUTOV"
+		fi
+		# The aclocal directory could get modified by other processes 
+		# uninstalling data from the sysroot. See Yocto #861 for details.
+		# We avoid this by taking a copy here and then files cannot disappear.
+		if [ -d ${STAGING_DATADIR}/aclocal ]; then
+			# for scratch build this directory can be empty
+			# so avoid cp's no files to copy error
+			cp-noerror ${STAGING_DATADIR}/aclocal ${B}/aclocal-copy/
+			acpaths="$acpaths -I ${B}/aclocal-copy/"
+		fi
+		# autoreconf is too shy to overwrite aclocal.m4 if it doesn't look
+		# like it was auto-generated.  Work around this by blowing it away
+		# by hand, unless the package specifically asked not to run aclocal.
+		if ! echo ${EXTRA_AUTORECONF} | grep -q "aclocal"; then
+			rm -f aclocal.m4
+		fi
+		if [ -e configure.in ]; then
+			CONFIGURE_AC=configure.in
+		else
+			CONFIGURE_AC=configure.ac
+		fi
+		if ! echo ${EXTRA_OECONF} | grep -q "\-\-disable-nls"; then
+			if grep "^[[:space:]]*AM_GLIB_GNU_GETTEXT" $CONFIGURE_AC >/dev/null; then
+				if grep "sed.*POTFILES" $CONFIGURE_AC >/dev/null; then
+					: do nothing -- we still have an old unmodified configure.ac
+		    		else
+					bbnote Executing glib-gettextize --force --copy
+					echo "no" | glib-gettextize --force --copy
+				fi
+			else if grep "^[[:space:]]*AM_GNU_GETTEXT" $CONFIGURE_AC >/dev/null; then
+				# We'd call gettextize here if it wasn't so broken...
+					cp ${STAGING_DATADIR}/gettext/config.rpath ${AUTOTOOLS_AUXDIR}/
+					if [ -d ${S}/po/ -a ! -e ${S}/po/Makefile.in.in ]; then
+						cp ${STAGING_DATADIR}/gettext/po/Makefile.in.in ${S}/po/
+					fi
+				fi
+			fi
+		fi
+		mkdir -p m4
+		if grep "^[[:space:]]*[AI][CT]_PROG_INTLTOOL" $CONFIGURE_AC >/dev/null; then
+			bbnote Executing intltoolize --copy --force --automake
+			intltoolize --copy --force --automake
+		fi
+		bbnote Executing autoreconf --verbose --install --force ${EXTRA_AUTORECONF} $acpaths
+		autoreconf -Wcross --verbose --install --force ${EXTRA_AUTORECONF} $acpaths || bbfatal "autoreconf execution failed."
+		cd $olddir
+	fi
 	if [ -e ${S}/configure ]; then
 		oe_runconf
 	else
-		oenote "nothing to configure"
+		bbnote "nothing to configure"
 	fi
 }
 

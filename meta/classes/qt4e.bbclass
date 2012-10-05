@@ -1,7 +1,9 @@
-DEPENDS_prepend = "${@["qt4-embedded ", ""][(bb.data.getVar('PN', d, 1)[:12] == 'qt4-embedded')]}"
+QT4EDEPENDS ?= "qt4-embedded "
+DEPENDS_prepend = "${QT4EDEPENDS}"
 
 inherit qmake2
 
+QT_BASE_NAME = "qt4-embedded"
 QT_DIR_NAME = "qtopia"
 QT_LIBINFIX = "E"
 # override variables set by qmake-base to compile Qt/Embedded apps

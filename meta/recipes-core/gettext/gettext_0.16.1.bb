@@ -4,10 +4,10 @@ SECTION = "libs"
 LICENSE = "GPLv2"
 LIC_FILES_CHKSUM = "file://COPYING;md5=9ea3144f04c41cd2eada5d3f472e6ea5"
 
-PR = "r3"
+PR = "r6"
 DEPENDS = "virtual/libiconv"
 DEPENDS_virtclass-native = ""
-PROVIDES = "virtual/libintl"
+PROVIDES = "virtual/libintl virtual/gettext"
 PROVIDES_virtclass-native = ""
 
 SRC_URI = "${GNU_MIRROR}/gettext/gettext-${PV}.tar.gz \
@@ -31,7 +31,7 @@ PARALLEL_MAKE = ""
 
 inherit autotools
 
-EXTRA_OECONF += "--without-lisp --disable-csharp --disable-openmp"
+EXTRA_OECONF += "--without-lisp --disable-csharp --disable-openmp --without-emacs"
 acpaths = '-I ${S}/autoconf-lib-link/m4/ \
            -I ${S}/gettext-runtime/m4 \
            -I ${S}/gettext-tools/m4'
@@ -53,3 +53,45 @@ do_configure_prepend() {
 PACKAGES =+ "libgettextlib libgettextsrc"
 FILES_libgettextlib = "${libdir}/libgettextlib-*.so*"
 FILES_libgettextsrc = "${libdir}/libgettextsrc-*.so*"
+
+PACKAGES =+ "gettext-runtime gettext-runtime-dev gettext-runtime-staticdev gettext-runtime-doc"
+
+FILES_${PN} += "${libdir}/${BPN}/*"
+
+FILES_gettext-runtime = "${bindir}/gettext \
+                         ${bindir}/ngettext \
+                         ${bindir}/envsubst \
+                         ${bindir}/gettext.sh \
+                         ${libdir}/libasprintf${SODEV} \
+                         ${libdir}/GNU.Gettext.dll \
+                        "
+FILES_gettext-runtime_append_libc-uclibc = " ${libdir}/libintl.so.* \
+                                             ${libdir}/charset.alias \
+                                           "
+FILES_gettext-runtime-staticdev += "${libdir}/libasprintf.a"
+FILES_gettext-runtime-dev += "${includedir}/autosprintf.h \
+                              ${libdir}/libasprintf${SOLIBDEV}"
+FILES_gettext-runtime-dev_append_libc-uclibc = " ${libdir}/libintl.so \
+                                                 ${includedir}/libintl.h \
+                                               "
+FILES_gettext-runtime-doc = "${mandir}/man1/gettext.* \
+                             ${mandir}/man1/ngettext.* \
+                             ${mandir}/man1/envsubst.* \
+                             ${mandir}/man1/.* \
+                             ${mandir}/man3/* \
+                             ${docdir}/gettext/gettext.* \
+                             ${docdir}/gettext/ngettext.* \
+                             ${docdir}/gettext/envsubst.* \
+                             ${docdir}/gettext/*.3.html \
+                             ${datadir}/gettext/ABOUT-NLS \
+                             ${docdir}/gettext/csharpdoc/* \
+                             ${docdir}/libasprintf/autosprintf.html \
+                             ${infodir}/autosprintf.info \
+                            "
+
+
+do_install_append() {
+	rm -f ${D}${libdir}/preloadable_libintl.so
+}
+
+BBCLASSEXTEND = "native nativesdk"

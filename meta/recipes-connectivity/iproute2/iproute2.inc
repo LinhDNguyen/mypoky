@@ -13,7 +13,7 @@ DEPENDS = "flex-native bison-native"
 
 inherit update-alternatives
 
-EXTRA_OEMAKE = "CC='${CC}' KERNEL_INCLUDE=${STAGING_KERNEL_DIR}/include DOCDIR=${docdir}/iproute2 SUBDIRS='lib tc ip' SBINDIR=/sbin"
+EXTRA_OEMAKE = "CC='${CC}' KERNEL_INCLUDE=${STAGING_KERNEL_DIR}/include DOCDIR=${docdir}/iproute2 SUBDIRS='lib tc ip' SBINDIR='${base_sbindir}' LIBDIR='${libdir}'"
 
 do_install () {
     oe_runmake DESTDIR=${D} install
@@ -23,12 +23,15 @@ do_install () {
     rm ${D}/share -rf || true
 }
 
-FILES_${PN} += "/usr/lib/tc/*"
-FILES_${PN}-dbg += "/usr/lib/tc/.debug"
+# There are only .so files in iproute2
+INSANE_SKIP_${PN} = "dev-so"
 
-ALTERNATIVE_NAME = "ip"
-ALTERNATIVE_PATH = "${base_sbindir}/ip.iproute2"
-ALTERNATIVE_LINK = "${base_bindir}/ip"
+FILES_${PN} += "${libdir}/tc"
+FILES_${PN}-dbg += "${libdir}/tc/.debug"
+
+ALTERNATIVE_${PN} = "ip"
+ALTERNATIVE_TARGET[ip] = "${base_sbindir}/ip.${BPN}"
+ALTERNATIVE_LINK_NAME[ip] = "${base_bindir}/ip"
 ALTERNATIVE_PRIORITY = "100"
 
 PARALLEL_MAKE = ""

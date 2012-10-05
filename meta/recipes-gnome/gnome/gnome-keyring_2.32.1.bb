@@ -11,14 +11,14 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=94d55d512a9ba36caa9b7df079bae19f \
 
 SECTION = "x11/gnome"
 
-PR = "r1"
+PR = "r10"
 
-inherit autotools gnome pkgconfig
+inherit autotools gnome gtk-doc pkgconfig
 
-DEPENDS = "gtk+ libgcrypt libtasn1 libtasn1-native gconf"
-RDEPENDS_${PN} = "libgnome-keyring"
+DEPENDS = "gtk+ libgcrypt libtasn1 libtasn1-native gconf ${@base_contains('DISTRO_FEATURES', 'pam', 'libpam', '', d)}"
+RDEPENDS_${PN} = "libgnome-keyring glib-2.0-utils"
 
-EXTRA_OECONF = "--disable-gtk-doc"
+EXTRA_OECONF = "${@base_contains('DISTRO_FEATURES', 'pam', '--enable-pam --with-pam-dir=${base_libdir}/security', '--disable-pam', d)}"
 
 SRC_URI += "file://org.gnome.keyring.service"
 
@@ -30,6 +30,23 @@ do_install_append () {
 	install -m 0644 ${WORKDIR}/org.gnome.keyring.service ${D}${datadir}/dbus-1/services
 }
 
-FILES_${PN} += "${datadir}/dbus-1/services"
-FILES_${PN}-dbg += "${libdir}/gnome-keyring/standalone/.debug/"
-FILES_${PN}-dbg += "${libdir}/gnome-keyring/devel/.debug/"
+pkg_postinst_${PN} () {
+	if [ "x$D" != "x" ]; then
+		exit 1
+	fi
+
+	test -x ${bindir}/glib-compile-schemas && glib-compile-schemas  ${datadir}/glib-2.0/schemas
+}
+
+FILES_${PN} += "${datadir}/dbus-1/services ${datadir}/gcr"
+                
+
+FILES_${PN}-dev += "${libdir}/${BPN}/devel/*.la \
+                    ${libdir}/${BPN}/devel/*${SOLIBSDEV} \
+                    ${libdir}/${BPN}/standalone/*.la \
+                    ${base_libdir}/security/*.la \
+                    ${base_libdir}/security/*${SOLIBSDEV}"
+
+FILES_${PN}-dbg += "${libdir}/${BPN}/standalone/.debug/ \
+                    ${libdir}/${BPN}/devel/.debug/ \
+                    ${base_libdir}/security/.debug/"

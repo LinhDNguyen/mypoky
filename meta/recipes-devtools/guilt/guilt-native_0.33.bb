@@ -3,12 +3,12 @@ LICENSE = "GPLv2"
 
 LIC_FILES_CHKSUM = "file://COPYING;md5=b6f3400dc1a01cebafe8a52b3f344135"
 
-PR = r0
 PV = "0.33"
+PR = "r1"
 
 inherit native
 
-SRC_URI = "http://www.kernel.org/pub/linux/kernel/people/jsipek/guilt/guilt-${PV}.tar.gz\
+SRC_URI = "${KERNELORG_MIRROR}/linux/kernel/people/jsipek/guilt/guilt-${PV}.tar.gz\
            file://guilt-push.patch \
 	   file://guilt-pop.patch \
 	   file://guilt.patch \
@@ -22,11 +22,14 @@ SRC_URI = "http://www.kernel.org/pub/linux/kernel/people/jsipek/guilt/guilt-${PV
 	   file://guilt-bash.patch \
 	   file://optional_head_check.patch"
 
+SRC_URI[md5sum] = "d800c5e0743d90543ef51d797a626e09"
+SRC_URI[sha256sum] = "64dfe6af1e924030f71163f3aa12cd846c80901d6ff8ef267ea35bb0752b4ba9"
+
 # we don't compile, we just install
 do_compile() {
 	:
 }
 
 do_install() {
-	oe_runmake PREFIX=${D}/${base_prefix}/usr install
+	oe_runmake PREFIX=${D}/${prefix} install
 }
